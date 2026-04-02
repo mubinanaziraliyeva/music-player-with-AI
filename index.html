@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="uz">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Music Player — Spotify Style (Dark)</title>
+
+    <!-- Google Font -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <!-- Tailwind CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome -->
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    />
+    <!-- Optional DaisyUI compiled CSS (light add-on) -->
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/daisyui@2.51.6/dist/full.css"
+    />
+
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body class="bg-[#0b0f12] text-gray-200 font-montserrat">
+    <header class="p-4">
+      <h1 class="text-2xl font-bold text-green-400">
+        Music Player — Spotify Style
+      </h1>
+    </header>
+
+    <main class="container mx-auto p-4 grid grid-cols-1 md:grid-cols-3 gap-6">
+      <!-- Player Card -->
+      <section
+        class="md:col-span-2 bg-gradient-to-br from-[#081018]/60 to-[#0f1519]/60 rounded-2xl p-6 backdrop-blur-md border border-gray-800 shadow-lg"
+      >
+        <div class="flex flex-col md:flex-row items-center gap-6">
+          <!-- Album Art -->
+          <div
+            id="coverContainer"
+            class="cover-container w-56 h-56 rounded-xl overflow-hidden flex-shrink-0 mx-auto md:mx-0"
+          >
+            <img
+              id="cover"
+              src="Cover/Alan Walker - Darkside.jpg"
+              alt="cover"
+              class="w-full h-full object-cover rounded-xl transition-transform duration-700"
+            />
+          </div>
+
+          <!-- Track Info and Controls -->
+          <div class="flex-1 w-full">
+            <div class="mb-4">
+              <h2 id="title" class="text-2xl font-semibold">
+                Alan Walker - Darkside
+              </h2>
+              <p id="artist" class="text-sm text-gray-400">Artist</p>
+            </div>
+
+            <!-- Progress -->
+            <div class="mb-2">
+              <div
+                class="flex items-center justify-between text-xs text-gray-400 mb-1"
+              >
+                <span id="currentTime">0:00</span>
+                <span id="duration">0:00</span>
+              </div>
+              <input
+                id="progress"
+                type="range"
+                min="0"
+                max="100"
+                value="0"
+                class="w-full h-2 bg-gray-700 rounded-lg accent-green-400"
+              />
+            </div>
+
+            <!-- Controls -->
+            <div class="flex items-center justify-center gap-6 mt-4">
+              <button
+                id="shuffleBtn"
+                class="btn btn-ghost text-gray-300 text-xl"
+                title="Shuffle"
+              >
+                <i class="fa-solid fa-shuffle"></i>
+              </button>
+              <button
+                id="prevBtn"
+                class="btn btn-ghost text-gray-300 text-2xl"
+                title="Previous"
+              >
+                <i class="fa-solid fa-backward-step"></i>
+              </button>
+
+              <button
+                id="playBtn"
+                class="bg-green-400 text-black rounded-full w-16 h-16 flex items-center justify-center shadow-lg"
+                title="Play/Pause"
+              >
+                <i id="playIcon" class="fa-solid fa-play"></i>
+              </button>
+
+              <button
+                id="nextBtn"
+                class="btn btn-ghost text-gray-300 text-2xl"
+                title="Next"
+              >
+                <i class="fa-solid fa-forward-step"></i>
+              </button>
+              <button
+                id="repeatBtn"
+                class="btn btn-ghost text-gray-300 text-xl"
+                title="Repeat"
+              >
+                <i class="fa-solid fa-repeat"></i>
+              </button>
+            </div>
+
+            <!-- Volume (vertical, hidden until toggled) -->
+            <div class="mt-6 relative">
+              <div class="flex items-center gap-2">
+                <button
+                  id="volMinus"
+                  class="btn btn-ghost text-gray-300"
+                  title="Volume Down"
+                >
+                  <i class="fa-solid fa-minus"></i>
+                </button>
+                <button
+                  id="volToggle"
+                  class="btn btn-ghost text-gray-300"
+                  title="Toggle Volume"
+                >
+                  <i class="fa-solid fa-volume-high"></i>
+                </button>
+                <button
+                  id="volPlus"
+                  class="btn btn-ghost text-gray-300"
+                  title="Volume Up"
+                >
+                  <i class="fa-solid fa-plus"></i>
+                </button>
+              </div>
+
+              <!-- vertical slider container; positioned absolute; hidden by default -->
+              <div
+                id="volumeWrap"
+                class="absolute right-0 mt-2 w-12 p-2 rounded-lg border border-gray-800 bg-[#071015]/80 hidden"
+              >
+                <input
+                  id="volume"
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  value="0.8"
+                  class="vertical-slider"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Playlist -->
+      <aside
+        class="bg-gradient-to-br from-[#071015]/60 to-[#0f1519]/60 rounded-2xl p-4 backdrop-blur-md border border-gray-800 shadow-lg"
+      >
+        <h3 class="text-lg font-semibold mb-4">Playlist</h3>
+        <ul id="playlist" class="space-y-3 overflow-y-auto max-h-[60vh] pr-2">
+          <!-- JS will populate playlist -->
+        </ul>
+      </aside>
+    </main>
+
+    <footer class="p-4 text-center text-xs text-gray-500">
+      Built with Tailwind, DaisyUI and FontAwesome — Glassmorphism, responsive,
+      and modern controls.
+    </footer>
+
+    <script src="script.js" defer></script>
+  </body>
+</html>
