@@ -27,6 +27,8 @@
     <!-- PWA manifest -->
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#0b0f12" />
+    <!-- jsmediatags for parsing uploaded file metadata -->
+    <script src="https://cdn.jsdelivr.net/npm/jsmediatags@3.9.5/dist/jsmediatags.min.js"></script>
   </head>
   <body class="bg-[#0b0f12] text-gray-200 font-montserrat">
     <header class="p-4">
@@ -35,7 +37,10 @@
       </h1>
     </header>
 
-    <main class="container mx-auto p-4 grid grid-cols-1 md:grid-cols-3 gap-6">
+    <main
+      class="container mx-auto p-4 grid grid-cols-1 md:grid-cols-3 gap-6 min-h-screen flex items-center"
+      style="align-items: stretch"
+    >
       <!-- Player Card -->
       <section
         class="md:col-span-2 bg-gradient-to-br from-[#081018]/60 to-[#0f1519]/60 rounded-2xl p-6 backdrop-blur-md border border-gray-800 shadow-lg glass-card"
@@ -240,6 +245,19 @@
         <div class="flex items-center justify-between mb-3">
           <h3 class="text-lg font-semibold">Playlist</h3>
           <div class="flex items-center gap-2">
+            <label
+              for="uploadInput"
+              class="btn btn-ghost text-sm cursor-pointer"
+              title="Upload Your Music"
+            >
+              <i class="fa-solid fa-upload"></i>
+            </label>
+            <input
+              id="uploadInput"
+              type="file"
+              accept="audio/*"
+              class="hidden"
+            />
             <button
               id="aiToggle"
               class="btn btn-ghost text-sm"
@@ -259,6 +277,14 @@
       Built with Tailwind, DaisyUI and FontAwesome — Glassmorphism, responsive,
       and modern controls.
     </footer>
+
+    <!-- AI Analysis / Current Mood box -->
+    <div
+      id="aiAnalysis"
+      class="fixed left-0 right-0 bottom-0 p-3 text-center text-sm text-gray-300 bg-[#00000022] backdrop-blur-sm border-t border-white/6 glass-card"
+    >
+      Analyzing...
+    </div>
 
     <!-- ColorThief for extracting dominant colors from covers -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/color-thief/2.3.2/color-thief.umd.js"></script>

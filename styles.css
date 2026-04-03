@@ -6,6 +6,7 @@
   --accent: #10b981;
   /* keep rgb parts for gradient generation: "16,185,129" */
   --accent-rgb: 16, 185, 129;
+  --bass: 0; /* 0..1 used for progress glow */
 }
 
 body {
@@ -204,9 +205,9 @@ body.dynamic-theme {
 /* Glass card helper for consistent glassmorphism */
 .glass-card {
   background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(10px);
-  box-shadow: 0 8px 30px rgba(2, 6, 23, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(20px);
+  box-shadow: 0 10px 40px rgba(2, 6, 23, 0.6);
   transition: all 0.8s ease-in-out;
 }
 
@@ -215,6 +216,63 @@ body,
 main,
 .glass-card {
   transition: all 0.8s ease-in-out;
+}
+
+/* Mesh gradient animated background */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(
+      600px 400px at 10% 20%,
+      rgba(var(--accent-rgb), 0.1),
+      transparent 20%
+    ),
+    radial-gradient(
+      500px 300px at 80% 80%,
+      rgba(var(--accent-rgb), 0.07),
+      transparent 20%
+    ),
+    radial-gradient(
+      400px 300px at 50% 60%,
+      rgba(255, 255, 255, 0.02),
+      transparent 20%
+    );
+  filter: blur(80px) saturate(120%);
+  opacity: 0.8;
+  animation: meshMove 30s linear infinite;
+}
+@keyframes meshMove {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(-6%, 4%, 0) scale(1.02);
+  }
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+/* Progress bar glow synced to bass */
+#progress {
+  box-shadow: 0 0 calc(12px * var(--bass)) rgba(var(--accent-rgb), var(--bass));
+  transition:
+    box-shadow 120ms linear,
+    background-color 300ms ease;
+}
+
+/* AI Analysis fixed bottom box adjustments */
+#aiAnalysis {
+  z-index: 60;
+  left: 12px;
+  right: 12px;
+  margin: 0 auto;
+  max-width: 1100px;
+  border-radius: 12px;
 }
 
 /* Smooth accent color transitions for elements that use --accent */

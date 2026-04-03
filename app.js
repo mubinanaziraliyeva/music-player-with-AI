@@ -49,6 +49,8 @@ const volPlus = document.getElementById("volPlus");
 const volumeWrap = document.getElementById("volumeWrap");
 const playlistEl = document.getElementById("playlist");
 const canvas = document.getElementById("visualizer");
+const uploadInput = document.getElementById("uploadInput");
+const aiAnalysisEl = document.getElementById("aiAnalysis");
 
 // Audio + WebAudio
 const audio = new Audio();
@@ -419,23 +421,49 @@ function initVisualizer() {
     analyser.getByteFrequencyData(dataArray);
     const w = canvas.width,
       h = canvas.height;
+    // clear with subtle fade for smoother motion
     canvasCtx.fillStyle = "rgba(0,0,0,0.06)";
     canvasCtx.fillRect(0, 0, w, h);
-    const barWidth = Math.max(2, (w / bufferLength) * 1.5);
-    let x = 0;
+    // create gradient from accent to light
     const accent =
       getComputedStyle(document.documentElement).getPropertyValue("--accent") ||
       "#10b981";
+    const grad = canvasCtx.createLinearGradient(0, 0, w, 0);
+    grad.addColorStop(0, accent.trim());
+    grad.addColorStop(1, "rgba(255,255,255,0.12)");
+
+    // draw a frequency-reactive wave
+    canvasCtx.lineWidth = 2;
+    canvasCtx.strokeStyle = grad;
+    canvasCtx.beginPath();
+    const sliceWidth = w / bufferLength;
+    let x = 0;
+    let bassSum = 0;
+    const bassCount = Math.max(4, Math.floor(bufferLength * 0.08));
     for (let i = 0; i < bufferLength; i++) {
-      const v = dataArray[i] / 255;
-      const y = v * h;
-      const grad = canvasCtx.createLinearGradient(0, 0, 0, h);
-      grad.addColorStop(0, accent.trim());
-      grad.addColorStop(1, "rgba(255,255,255,0.04)");
-      canvasCtx.fillStyle = grad;
-      canvasCtx.fillRect(x, h - y, barWidth, y);
-      x += barWidth + 1;
+      const v = dataArray[i] / 255; // 0..1
+      const y = h / 2 + (v - 0.5) * h * 0.9; // center wave
+      if (i === 0) canvasCtx.moveTo(x, y);
+      else canvasCtx.lineTo(x, y);
+      x += sliceWidth;
+      if (i < bassCount) bassSum += dataArray[i];
     }
+    canvasCtx.stroke();
+
+    // draw filled area with gradient and low alpha
+    canvasCtx.lineTo(w, h);
+    canvasCtx.lineTo(0, h);
+    canvasCtx.closePath();
+    canvasCtx.fillStyle = "rgba(16,185,129,0.06)";
+    canvasCtx.fill();
+
+    // compute bass level (0..1)
+    const bassAvg = bassSum / (bassCount * 255);
+    const bass = Math.min(1, Math.max(0, bassAvg * 1.6));
+    document.documentElement.style.setProperty(
+      "--bass",
+      String(bass.toFixed(3)),
+    );
   }
   draw();
 }
@@ -532,7 +560,11 @@ function tryInitCoverVisualizer() {
 
 // MOOD DETECTION: quick estimation using frequency centroid / energy
 function computeMoodForIndex(idx) {
-  if (!analyser) return;
+  if (!analyser) {
+    if (aiAnalysisEl) aiAnalysisEl.textContent = "Mood: Unknown";
+    return;
+  }
+  if (aiAnalysisEl) aiAnalysisEl.textContent = "Analyzing rhythm...";
   // sample a few frames quickly
   const sampleCount = 6;
   const tmp = new Uint8Array(analyser.frequencyBinCount);
@@ -553,6 +585,8 @@ function computeMoodForIndex(idx) {
   const avg = sum / sampleCount;
   const mood = avg > 0.25 ? "energetic" : "calm";
   trackMood[idx] = mood;
+  if (aiAnalysisEl)
+    aiAnalysisEl.textContent = `Mood: ${mood.charAt(0).toUpperCase() + mood.slice(1)}`;
 }
 
 // Events
@@ -748,6 +782,78 @@ if (playlistEl) {
     const idx = Number(btn.getAttribute("data-index"));
     if (!isNaN(idx)) toggleLike(idx);
   });
+}
+
+// Upload handling: parse metadata via jsmediatags if available
+if (typeof uploadInput !== "undefined" && uploadInput) {
+  uploadInput.addEventListener("change", (e) => {
+    const f = e.target.files && e.target.files[0];
+    if (!f) return;
+    if (aiAnalysisEl) aiAnalysisEl.textContent = "Uploading and analyzing...";
+    const objUrl = window.URL.createObjectURL(f);
+    // try jsmediatags to extract metadata & cover
+    if (window.jsmediatags) {
+      try {
+        window.jsmediatags.read(f, {
+          onSuccess: function (tag) {
+            const title = (tag.tags.title || f.name).toString();
+            const artist = (tag.tags.artist || "").toString();
+            if (tag.tags.picture) {
+              const picture = tag.tags.picture;
+              const byteArray = new Uint8Array(picture.data);
+              const blob = new Blob([byteArray], { type: picture.format });
+              const coverUrl = URL.createObjectURL(blob);
+              addUploadedTrack(title, artist, objUrl, coverUrl, f.name);
+            } else {
+              addUploadedTrack(title, artist, objUrl, null, f.name);
+            }
+          },
+          onError: function (err) {
+            addUploadedTrack(
+              f.name.replace(/\.[^/.]+$/, ""),
+              "",
+              objUrl,
+              null,
+              f.name,
+            );
+          },
+        });
+      } catch (err) {
+        addUploadedTrack(
+          f.name.replace(/\.[^/.]+$/, ""),
+          "",
+          objUrl,
+          null,
+          f.name,
+        );
+      }
+    } else {
+      addUploadedTrack(
+        f.name.replace(/\.[^/.]+$/, ""),
+        "",
+        objUrl,
+        null,
+        f.name,
+      );
+    }
+    uploadInput.value = "";
+  });
+}
+
+function addUploadedTrack(title, artist, fileUrl, coverUrl, originalName) {
+  const t = artist ? artist + " - " + title : title;
+  const track = {
+    title: t,
+    file: fileUrl,
+    cover: coverUrl || "Cover/For you.jpg",
+  };
+  tracks.push(track);
+  buildTFIDF();
+  renderPlaylist();
+  const newIndex = tracks.length - 1;
+  crossfadeTo(newIndex);
+  if (aiAnalysisEl) aiAnalysisEl.textContent = `Playing: ${track.title}`;
+  markRecommendations();
 }
 
 // End of app.js
