@@ -43,7 +43,7 @@
     >
       <!-- Player Card -->
       <section
-        class="md:col-span-2 bg-gradient-to-br from-[#081018]/60 to-[#0f1519]/60 rounded-2xl p-6 backdrop-blur-md border border-gray-800 shadow-lg glass-card"
+        class="md:col-span-2 player-card bg-gradient-to-br from-[#081018]/60 to-[#0f1519]/60 rounded-2xl p-6 backdrop-blur-md border border-gray-800 shadow-lg glass-card"
       >
         <div class="flex flex-col md:flex-row items-center gap-6">
           <!-- Album Art -->
@@ -250,12 +250,13 @@
               class="btn btn-ghost text-sm cursor-pointer"
               title="Upload Your Music"
             >
-              <i class="fa-solid fa-upload"></i>
+              <i class="fa-solid fa-plus"></i>
             </label>
             <input
               id="uploadInput"
               type="file"
               accept="audio/*"
+              multiple
               class="hidden"
             />
             <button
@@ -277,6 +278,14 @@
       Built with Tailwind, DaisyUI and FontAwesome — Glassmorphism, responsive,
       and modern controls.
     </footer>
+
+    <!-- Now Playing Stats (above AI Analysis) -->
+    <div
+      id="nowStats"
+      class="fixed left-0 right-0 bottom-14 p-3 text-center text-sm text-gray-200 bg-[#00000022] backdrop-blur-sm border-t border-white/6 glass-card"
+    >
+      Now Playing — Energy: 0% • Mood: Unknown
+    </div>
 
     <!-- AI Analysis / Current Mood box -->
     <div

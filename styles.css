@@ -19,9 +19,24 @@ body {
     "Helvetica Neue",
     Arial;
 
+  background: radial-gradient(
+    circle at 50% 50%,
+    rgba(var(--accent-rgb), 0.2),
+    #000
+  );
+  animation: breathe 10s infinite alternate;
   transition:
     background 0.8s ease-in-out,
     color 0.5s ease;
+}
+
+@keyframes breathe {
+  0% {
+    background-size: 100% 100%;
+  }
+  100% {
+    background-size: 150% 150%;
+  }
 }
 
 /* Glassmorphism card effect */
@@ -206,7 +221,7 @@ body.dynamic-theme {
 .glass-card {
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.06);
-  backdrop-filter: blur(20px);
+  backdrop-filter: blur(15px);
   box-shadow: 0 10px 40px rgba(2, 6, 23, 0.6);
   transition: all 0.8s ease-in-out;
 }
@@ -346,6 +361,23 @@ body::before {
   transform: scale(1.06);
   box-shadow: 0 10px 40px rgba(var(--accent-rgb), 0.18);
 }
+.play-btn.playing {
+  animation: playPulse 1.2s ease-in-out infinite;
+}
+@keyframes playPulse {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 8px 30px rgba(var(--accent-rgb), 0.15);
+  }
+  50% {
+    transform: scale(1.06);
+    box-shadow: 0 18px 50px rgba(var(--accent-rgb), 0.24);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 8px 30px rgba(var(--accent-rgb), 0.15);
+  }
+}
 .cover-container:hover img {
   transform: scale(1.02);
 }
@@ -373,6 +405,12 @@ ul#playlist li:hover {
 /* Responsive grid improvements */
 main.container {
   max-width: 1200px;
+  margin-left: auto;
+  margin-right: auto;
+}
+/* Make player card larger and centered */
+.player-card {
+  max-width: 900px;
   margin-left: auto;
   margin-right: auto;
 }

@@ -24,6 +24,16 @@ const tracks = [
     cover: "Cover/Neoni - Darkside.jpg",
   },
   { title: "Tattoo", file: "Music/Tattoo.mp3", cover: "Cover/Tattoo.jpg" },
+  {
+    title: "Matadora",
+    file: "Music/MATADORA.mp3",
+    cover: "Cover/MATADORA.jpg",
+  },
+  {
+    title: "Rampampam",
+    file: "Music/Rampampam.mp3",
+    cover: "Cover/Rampampam.jpg",
+  },
 ];
 
 // DOM refs
@@ -424,13 +434,16 @@ function initVisualizer() {
     // clear with subtle fade for smoother motion
     canvasCtx.fillStyle = "rgba(0,0,0,0.06)";
     canvasCtx.fillRect(0, 0, w, h);
-    // create gradient from accent to light
+    // create gradient from accent to neon cyan and add glow
     const accent =
       getComputedStyle(document.documentElement).getPropertyValue("--accent") ||
       "#10b981";
+    const neon = "#00fff7";
     const grad = canvasCtx.createLinearGradient(0, 0, w, 0);
     grad.addColorStop(0, accent.trim());
-    grad.addColorStop(1, "rgba(255,255,255,0.12)");
+    grad.addColorStop(1, neon);
+    canvasCtx.shadowBlur = 18;
+    canvasCtx.shadowColor = neon;
 
     // draw a frequency-reactive wave
     canvasCtx.lineWidth = 2;
@@ -450,7 +463,9 @@ function initVisualizer() {
     }
     canvasCtx.stroke();
 
-    // draw filled area with gradient and low alpha
+    // draw filled area with gradient and low alpha (reduce shadow)
+    canvasCtx.shadowBlur = 6;
+    canvasCtx.shadowColor = neon;
     canvasCtx.lineTo(w, h);
     canvasCtx.lineTo(0, h);
     canvasCtx.closePath();
@@ -682,6 +697,9 @@ audio.addEventListener("play", () => {
   playIcon.classList.add("fa-pause");
   coverEl.classList.add("playing-rotate");
   if (coverContainer) coverContainer.classList.add("cover-active");
+  try {
+    playBtn.classList.add("playing");
+  } catch (e) {}
   // compute mood shortly after playback starts (requires analyser)
   setTimeout(() => {
     try {
@@ -696,6 +714,9 @@ audio.addEventListener("pause", () => {
   playIcon.classList.add("fa-play");
   coverEl.classList.remove("playing-rotate");
   if (coverContainer) coverContainer.classList.remove("cover-active");
+  try {
+    playBtn.classList.remove("playing");
+  } catch (e) {}
 });
 audio.addEventListener("timeupdate", updateProgress);
 audio.addEventListener("loadedmetadata", () => {
@@ -787,38 +808,48 @@ if (playlistEl) {
 // Upload handling: parse metadata via jsmediatags if available
 if (typeof uploadInput !== "undefined" && uploadInput) {
   uploadInput.addEventListener("change", (e) => {
-    const f = e.target.files && e.target.files[0];
-    if (!f) return;
-    if (aiAnalysisEl) aiAnalysisEl.textContent = "Uploading and analyzing...";
-    const objUrl = window.URL.createObjectURL(f);
-    // try jsmediatags to extract metadata & cover
-    if (window.jsmediatags) {
-      try {
-        window.jsmediatags.read(f, {
-          onSuccess: function (tag) {
-            const title = (tag.tags.title || f.name).toString();
-            const artist = (tag.tags.artist || "").toString();
-            if (tag.tags.picture) {
-              const picture = tag.tags.picture;
-              const byteArray = new Uint8Array(picture.data);
-              const blob = new Blob([byteArray], { type: picture.format });
-              const coverUrl = URL.createObjectURL(blob);
-              addUploadedTrack(title, artist, objUrl, coverUrl, f.name);
-            } else {
-              addUploadedTrack(title, artist, objUrl, null, f.name);
-            }
-          },
-          onError: function (err) {
-            addUploadedTrack(
-              f.name.replace(/\.[^/.]+$/, ""),
-              "",
-              objUrl,
-              null,
-              f.name,
-            );
-          },
-        });
-      } catch (err) {
+    const files = e.target.files || [];
+    if (!files.length) return;
+    if (aiAnalysisEl) aiAnalysisEl.textContent = "Adding your files...";
+    Array.from(files).forEach((f) => {
+      const objUrl = window.URL.createObjectURL(f);
+      // try jsmediatags to extract metadata & cover
+      if (window.jsmediatags) {
+        try {
+          window.jsmediatags.read(f, {
+            onSuccess: function (tag) {
+              const title = (tag.tags.title || f.name).toString();
+              const artist = (tag.tags.artist || "").toString();
+              if (tag.tags.picture) {
+                const picture = tag.tags.picture;
+                const byteArray = new Uint8Array(picture.data);
+                const blob = new Blob([byteArray], { type: picture.format });
+                const coverUrl = URL.createObjectURL(blob);
+                addUploadedTrack(title, artist, objUrl, coverUrl, f.name);
+              } else {
+                addUploadedTrack(title, artist, objUrl, null, f.name);
+              }
+            },
+            onError: function (err) {
+              addUploadedTrack(
+                f.name.replace(/\.[^/.]+$/, ""),
+                "",
+                objUrl,
+                null,
+                f.name,
+              );
+            },
+          });
+        } catch (err) {
+          addUploadedTrack(
+            f.name.replace(/\.[^/.]+$/, ""),
+            "",
+            objUrl,
+            null,
+            f.name,
+          );
+        }
+      } else {
         addUploadedTrack(
           f.name.replace(/\.[^/.]+$/, ""),
           "",
@@ -827,15 +858,7 @@ if (typeof uploadInput !== "undefined" && uploadInput) {
           f.name,
         );
       }
-    } else {
-      addUploadedTrack(
-        f.name.replace(/\.[^/.]+$/, ""),
-        "",
-        objUrl,
-        null,
-        f.name,
-      );
-    }
+    });
     uploadInput.value = "";
   });
 }
