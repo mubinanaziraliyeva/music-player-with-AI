@@ -29,10 +29,13 @@ const tracks = [
 // DOM refs
 const coverEl = document.getElementById("cover");
 const coverContainer = document.getElementById("coverContainer");
+const coverCanvas = document.getElementById("coverVisualizer");
 const titleEl = document.getElementById("title");
 const artistEl = document.getElementById("artist");
 const playBtn = document.getElementById("playBtn");
 const playIcon = document.getElementById("playIcon");
+const likeBtn = document.getElementById("likeBtn");
+const likeIcon = document.getElementById("likeIcon");
 const prevBtn = document.getElementById("prevBtn");
 const nextBtn = document.getElementById("nextBtn");
 const shuffleBtn = document.getElementById("shuffleBtn");
@@ -57,6 +60,9 @@ let audioCtx = null,
   analyser = null,
   dataArray = null,
   bufferLength = 0;
+let eqLow = null,
+  eqMid = null,
+  eqHigh = null;
 
 function ensureAudioContext() {
   if (!audioCtx) {
@@ -66,12 +72,27 @@ function ensureAudioContext() {
     } catch (e) {
       console.warn(e);
     }
+    // create nodes: eq chain -> gain -> analyser -> destination
     gainNode = audioCtx.createGain();
     analyser = audioCtx.createAnalyser();
-    analyser.fftSize = 256;
+    analyser.fftSize = 512;
     bufferLength = analyser.frequencyBinCount;
     dataArray = new Uint8Array(bufferLength);
-    if (sourceNode) sourceNode.connect(gainNode);
+    // EQ nodes
+    eqLow = audioCtx.createBiquadFilter();
+    eqLow.type = "lowshelf";
+    eqLow.frequency.value = 120;
+    eqMid = audioCtx.createBiquadFilter();
+    eqMid.type = "peaking";
+    eqMid.frequency.value = 1000;
+    eqMid.Q.value = 1;
+    eqHigh = audioCtx.createBiquadFilter();
+    eqHigh.type = "highshelf";
+    eqHigh.frequency.value = 3000;
+    if (sourceNode) sourceNode.connect(eqLow);
+    eqLow.connect(eqMid);
+    eqMid.connect(eqHigh);
+    eqHigh.connect(gainNode);
     gainNode.connect(analyser);
     analyser.connect(audioCtx.destination);
   }
@@ -83,6 +104,16 @@ let currentIndex = 0,
   repeatMode = "off";
 let colorThief = null;
 let aiEnabled = true;
+// Liked tracks set
+let likedTracks = new Set();
+try {
+  const raw = localStorage.getItem("mp_likes");
+  if (raw) {
+    JSON.parse(raw).forEach((i) => likedTracks.add(i));
+  }
+} catch (e) {}
+// mood cache per track index
+const trackMood = {};
 
 function formatTime(s) {
   if (!s || isNaN(s)) return "0:00";
@@ -137,42 +168,51 @@ async function crossfadeTo(idx) {
 
 function loadTrack(idx) {
   const t = tracks[idx];
+  // show skeleton while loading
+  if (coverContainer) coverContainer.classList.add("loading");
   audio.src = encodeURI(t.file);
   titleEl.textContent = t.title;
   const parts = t.title.split(" - ");
   artistEl.textContent = parts.length > 1 ? parts[0] : "Unknown Artist";
   document.title = `${parts.length > 1 ? parts[0] + " - " : ""}${t.title}`;
-  coverEl.src = encodeURI(t.cover);
   try {
     localStorage.setItem("mp_lastIndex", String(idx));
   } catch (e) {}
+  // set cover; when cover image loads, extract color and stop skeleton
   coverEl.onload = () => {
+    if (coverContainer) coverContainer.classList.remove("loading");
     try {
       if (window.ColorThief) {
         colorThief = colorThief || new ColorThief();
         const rgb = colorThief.getColor(coverEl);
-        if (rgb)
+        if (rgb) {
           document.documentElement.style.setProperty(
             "--accent",
             `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`,
           );
-        // also set numeric rgb parts for gradients
-        document.documentElement.style.setProperty(
-          "--accent-rgb",
-          `${rgb[0]},${rgb[1]},${rgb[2]}`,
-        );
-        document.body.classList.add("dynamic-theme");
+          document.documentElement.style.setProperty(
+            "--accent-rgb",
+            `${rgb[0]},${rgb[1]},${rgb[2]}`,
+          );
+          document.body.classList.add("dynamic-theme");
+        }
       }
     } catch (e) {}
     tryInitVisualizer();
+    tryInitCoverVisualizer();
+    // update liked icon
+    try {
+      likeIcon.classList.toggle("liked", likedTracks.has(String(idx)));
+    } catch (e) {}
+    // mark recs for UI
+    try {
+      markRecommendations();
+    } catch (e) {}
   };
+  coverEl.src = encodeURI(t.cover);
   document
     .querySelectorAll("#playlist li")
     .forEach((li, i) => li.classList.toggle("bg-gray-800/30", i === idx));
-  // mark recommended items in the playlist for current track
-  try {
-    markRecommendations();
-  } catch (e) {}
 }
 
 function renderPlaylist() {
@@ -180,11 +220,75 @@ function renderPlaylist() {
   tracks.forEach((t, i) => {
     const li = document.createElement("li");
     li.className =
-      "flex items-center gap-3 p-2 rounded-lg hover:bg-gray-800/30 cursor-pointer";
-    li.innerHTML = `<img src="${encodeURI(t.cover)}" class="w-12 h-12 rounded-md object-cover" /><div class="flex-1"><div class="font-medium">${t.title}</div></div><div class="text-sm text-gray-400">${i + 1}</div>`;
-    li.addEventListener("click", () => crossfadeTo(i));
+      "flex items-center gap-3 p-2 rounded-lg hover:bg-gray-800/30 cursor-pointer transition-transform duration-200";
+    const liked = likedTracks.has(String(i));
+    li.innerHTML = `
+      <img src="${encodeURI(t.cover)}" class="w-12 h-12 rounded-md object-cover" />
+      <div class="flex-1">
+        <div class="font-medium">${t.title}</div>
+      </div>
+      <div class="flex items-center gap-2">
+        <button class="track-like btn btn-ghost text-sm" data-index="${i}" title="Like">
+          <i class="${liked ? "fa-solid fa-heart liked" : "fa-regular fa-heart"}"></i>
+        </button>
+        <div class="text-sm text-gray-400">${i + 1}</div>
+      </div>
+    `;
+    li.addEventListener("click", (e) => {
+      // avoid click when pressing like button
+      if (e.target.closest(".track-like")) return;
+      crossfadeTo(i);
+    });
     playlistEl.appendChild(li);
   });
+}
+
+// TF-IDF recommendation helpers
+let tfidfVectors = null;
+let idf = null;
+function buildTFIDF() {
+  const docs = tracks.map((t) => (t.title || "").toLowerCase());
+  const tokenized = docs.map((d) => d.split(/[^a-z0-9]+/).filter(Boolean));
+  const df = {};
+  tokenized.forEach((tokens) => {
+    const seen = new Set();
+    tokens.forEach((tok) => {
+      if (!seen.has(tok)) {
+        df[tok] = (df[tok] || 0) + 1;
+        seen.add(tok);
+      }
+    });
+  });
+  idf = {};
+  const N = docs.length;
+  Object.keys(df).forEach((tok) => {
+    idf[tok] = Math.log((N + 1) / (df[tok] + 1)) + 1;
+  });
+  tfidfVectors = tokenized.map((tokens) => {
+    const tf = {};
+    tokens.forEach((t) => (tf[t] = (tf[t] || 0) + 1));
+    const vec = {};
+    Object.keys(tf).forEach(
+      (t) => (vec[t] = (tf[t] / tokens.length) * (idf[t] || 0)),
+    );
+    return vec;
+  });
+}
+
+function cosineSim(a, b) {
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+  let dot = 0,
+    na = 0,
+    nb = 0;
+  keys.forEach((k) => {
+    const va = a[k] || 0;
+    const vb = b[k] || 0;
+    dot += va * vb;
+    na += va * va;
+    nb += vb * vb;
+  });
+  if (na === 0 || nb === 0) return 0;
+  return dot / (Math.sqrt(na) * Math.sqrt(nb));
 }
 
 // Simple AI recommendation: token overlap scoring
@@ -195,20 +299,55 @@ function tokenizeTitle(title) {
     .filter(Boolean);
 }
 function getRecommendations(idx, limit = 3) {
-  const base = tracks[idx];
-  const tokens = tokenizeTitle(base.title);
+  // Use TF-IDF cosine similarity as primary signal, then boost by likes/mood/artist overlap
+  if (!tfidfVectors) buildTFIDF();
+  const baseVec = tfidfVectors[idx] || {};
+  const baseMood = trackMood[idx] || "neutral";
   const scores = tracks.map((t, i) => {
     if (i === idx) return { i, score: -1 };
-    const other = tokenizeTitle(t.title);
-    // count common tokens
-    const common = tokens.filter((x) => other.includes(x)).length;
-    // prefer same artist (if title contains ' - ')
+    const sim = cosineSim(baseVec, tfidfVectors[i] || {});
+    // token overlap fallback
+    const tokens = tokenizeTitle(tracks[i].title);
+    const common = tokenizeTitle(tracks[idx].title).filter((x) =>
+      tokens.includes(x),
+    ).length;
     const sameArtist =
-      base.title.split(" - ")[0] === t.title.split(" - ")[0] ? 2 : 0;
-    return { i, score: common + sameArtist + Math.random() * 0.2 };
+      tracks[idx].title.split(" - ")[0] === tracks[i].title.split(" - ")[0]
+        ? 1
+        : 0;
+    const likedBoost = likedTracks.has(String(i)) ? 0.9 : 0;
+    const mood = trackMood[i] || "neutral";
+    const moodBoost = mood === baseMood && baseMood !== "neutral" ? 0.6 : 0;
+    const score =
+      sim * 3 +
+      common * 0.6 +
+      sameArtist * 0.6 +
+      likedBoost +
+      moodBoost +
+      Math.random() * 0.05;
+    return { i, score };
   });
   scores.sort((a, b) => b.score - a.score);
   return scores.slice(0, limit).map((s) => s.i);
+}
+
+// Toggle like for currently playing track via like button
+function toggleLike(index) {
+  const key = String(index);
+  if (likedTracks.has(key)) {
+    likedTracks.delete(key);
+  } else {
+    likedTracks.add(key);
+  }
+  try {
+    localStorage.setItem("mp_likes", JSON.stringify(Array.from(likedTracks)));
+  } catch (e) {}
+  // update UI
+  renderPlaylist();
+  try {
+    likeIcon.classList.toggle("liked", likedTracks.has(String(currentIndex)));
+  } catch (e) {}
+  markRecommendations();
 }
 
 // Expose AI toggle button behavior
@@ -226,13 +365,24 @@ function markRecommendations() {
   const recs = getRecommendations(currentIndex, 5);
   const lis = playlistEl.querySelectorAll("li");
   lis.forEach((li, i) => {
+    // remove old badges and recommended marker
     li.querySelectorAll(".rec-badge").forEach((n) => n.remove());
+    li.classList.remove("recommended-item");
     if (recs.includes(i)) {
       const span = document.createElement("span");
       span.className = "rec-badge text-xs text-green-300 ml-2";
       span.textContent = "Recommended";
-      li.querySelector(".flex-1").appendChild(span);
+      const flex = li.querySelector(".flex-1");
+      if (flex) flex.appendChild(span);
+      li.classList.add("recommended-item");
     }
+    // visually mark liked tracks (if not handled during render)
+    try {
+      const idx = i;
+      const likeIconEl = li.querySelector(".fa-heart");
+      if (likeIconEl)
+        likeIconEl.classList.toggle("liked", likedTracks.has(String(idx)));
+    } catch (e) {}
   });
 }
 
@@ -296,6 +446,113 @@ function tryInitVisualizer() {
     dataArray = new Uint8Array(bufferLength);
     initVisualizer();
   }
+}
+
+// EQ slider wiring
+const eqBassEl = document.getElementById("eqBass");
+const eqMidEl = document.getElementById("eqMid");
+const eqHighEl = document.getElementById("eqHigh");
+function wireEQ() {
+  if (!audioCtx) ensureAudioContext();
+  if (!eqLow || !eqMid || !eqHigh) return;
+  function update() {
+    try {
+      eqLow.gain.value = Number(eqBassEl.value);
+    } catch (e) {}
+    try {
+      eqMid.gain.value = Number(eqMidEl.value);
+    } catch (e) {}
+    try {
+      eqHigh.gain.value = Number(eqHighEl.value);
+    } catch (e) {}
+  }
+  if (eqBassEl) eqBassEl.addEventListener("input", update);
+  if (eqMidEl) eqMidEl.addEventListener("input", update);
+  if (eqHighEl) eqHighEl.addEventListener("input", update);
+  update();
+}
+
+// COVER VISUALIZER (circular bars around the cover)
+let coverCtx = null;
+function initCoverVisualizer() {
+  if (!coverCanvas) return;
+  ensureAudioContext();
+  if (!analyser) return;
+  coverCtx = coverCanvas.getContext("2d");
+  const resize = () => {
+    const r = coverCanvas.getBoundingClientRect();
+    coverCanvas.width = Math.floor(r.width * devicePixelRatio);
+    coverCanvas.height = Math.floor(r.height * devicePixelRatio);
+    coverCtx.scale(devicePixelRatio, devicePixelRatio);
+  };
+  resize();
+  window.addEventListener("resize", resize);
+  drawCover();
+}
+
+function drawCover() {
+  requestAnimationFrame(drawCover);
+  if (!analyser || !coverCtx) return;
+  analyser.getByteFrequencyData(dataArray);
+  const rect = coverCanvas.getBoundingClientRect();
+  const w = rect.width;
+  const h = rect.height;
+  coverCtx.clearRect(0, 0, w, h);
+  const cx = w / 2;
+  const cy = h / 2;
+  const radius = Math.min(w, h) / 2.3;
+  const bars = Math.min(64, dataArray.length);
+  for (let i = 0; i < bars; i++) {
+    const v = dataArray[Math.floor(i * (dataArray.length / bars))] / 255;
+    const angle = (i / bars) * Math.PI * 2;
+    const len = radius * (0.25 + v * 0.85);
+    const x1 = cx + Math.cos(angle) * radius;
+    const y1 = cy + Math.sin(angle) * radius;
+    const x2 = cx + Math.cos(angle) * (radius + len);
+    const y2 = cy + Math.sin(angle) * (radius + len);
+    const grad = coverCtx.createLinearGradient(x1, y1, x2, y2);
+    const accent =
+      getComputedStyle(document.documentElement).getPropertyValue("--accent") ||
+      "#10b981";
+    grad.addColorStop(0, accent.trim());
+    grad.addColorStop(1, "rgba(255,255,255,0.06)");
+    coverCtx.strokeStyle = grad;
+    coverCtx.lineWidth = 2;
+    coverCtx.beginPath();
+    coverCtx.moveTo(x1, y1);
+    coverCtx.lineTo(x2, y2);
+    coverCtx.stroke();
+  }
+}
+
+function tryInitCoverVisualizer() {
+  tryInitVisualizer();
+  initCoverVisualizer();
+}
+
+// MOOD DETECTION: quick estimation using frequency centroid / energy
+function computeMoodForIndex(idx) {
+  if (!analyser) return;
+  // sample a few frames quickly
+  const sampleCount = 6;
+  const tmp = new Uint8Array(analyser.frequencyBinCount);
+  let sum = 0;
+  for (let s = 0; s < sampleCount; s++) {
+    analyser.getByteFrequencyData(tmp);
+    // higher bins mean more energy in highs -> energetic
+    const highStart = Math.floor(tmp.length * 0.5);
+    let highSum = 0,
+      total = 0;
+    for (let i = 0; i < tmp.length; i++) {
+      total += tmp[i];
+      if (i >= highStart) highSum += tmp[i];
+    }
+    const ratio = total > 0 ? highSum / total : 0;
+    sum += ratio;
+  }
+  const avg = sum / sampleCount;
+  const mood = avg > 0.25 ? "energetic" : "calm";
+  trackMood[idx] = mood;
 }
 
 // Events
@@ -391,6 +648,13 @@ audio.addEventListener("play", () => {
   playIcon.classList.add("fa-pause");
   coverEl.classList.add("playing-rotate");
   if (coverContainer) coverContainer.classList.add("cover-active");
+  // compute mood shortly after playback starts (requires analyser)
+  setTimeout(() => {
+    try {
+      computeMoodForIndex(currentIndex);
+      markRecommendations();
+    } catch (e) {}
+  }, 300);
 });
 audio.addEventListener("pause", () => {
   isPlaying = false;
@@ -402,6 +666,13 @@ audio.addEventListener("pause", () => {
 audio.addEventListener("timeupdate", updateProgress);
 audio.addEventListener("loadedmetadata", () => {
   durationEl.textContent = formatTime(audio.duration);
+  // metadata loaded: remove skeleton if any and compute mood if possible
+  try {
+    if (coverContainer) coverContainer.classList.remove("loading");
+  } catch (e) {}
+  try {
+    computeMoodForIndex(currentIndex);
+  } catch (e) {}
 });
 audio.addEventListener("ended", () => {
   if (repeatMode === "one") {
@@ -436,6 +707,7 @@ audio.addEventListener("ended", () => {
 
 // init
 renderPlaylist();
+buildTFIDF();
 try {
   const si = parseInt(localStorage.getItem("mp_lastIndex"));
   if (!isNaN(si) && si >= 0 && si < tracks.length) currentIndex = si;
@@ -447,6 +719,9 @@ try {
 } catch (e) {}
 setVolume(parseFloat(volumeEl.value) || 0.8);
 tryInitVisualizer();
+tryInitCoverVisualizer();
+wireEQ();
+markRecommendations();
 document
   .querySelectorAll("#playlist li")
   .forEach((li, i) =>
@@ -455,5 +730,24 @@ document
 [playBtn, prevBtn, nextBtn, shuffleBtn, repeatBtn].forEach(
   (b) => b && b.setAttribute("tabindex", "0"),
 );
+
+// Like button for current track
+if (likeBtn) {
+  likeBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    toggleLike(currentIndex);
+  });
+}
+
+// Delegated listener for per-track like buttons in playlist
+if (playlistEl) {
+  playlistEl.addEventListener("click", (e) => {
+    const btn = e.target.closest(".track-like");
+    if (!btn) return;
+    e.stopPropagation();
+    const idx = Number(btn.getAttribute("data-index"));
+    if (!isNaN(idx)) toggleLike(idx);
+  });
+}
 
 // End of app.js
