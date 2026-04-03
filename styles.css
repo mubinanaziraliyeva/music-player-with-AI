@@ -4,6 +4,8 @@
 :root {
   --glass-bg: rgba(255, 255, 255, 0.04);
   --accent: #10b981;
+  /* keep rgb parts for gradient generation: "16,185,129" */
+  --accent-rgb: 16, 185, 129;
 }
 
 body {
@@ -15,6 +17,10 @@ body {
     Roboto,
     "Helvetica Neue",
     Arial;
+
+  transition:
+    background 0.8s ease-in-out,
+    color 0.5s ease;
 }
 
 /* Glassmorphism card effect */
@@ -138,6 +144,32 @@ input[type="range"]::-webkit-slider-thumb {
     0 2px 6px rgba(0, 0, 0, 0.6);
 }
 
+/* Play button uses CSS variable for dynamic accent and is touch-friendly */
+.play-btn {
+  background: var(--accent);
+  color: #000;
+  z-index: 2;
+  border: 0;
+  transition:
+    transform 0.12s ease,
+    box-shadow 0.12s ease;
+}
+.play-btn:active {
+  transform: scale(0.98);
+}
+
+/* Safe mobile size for play button and avoid overlapping with other controls */
+@media (max-width: 640px) {
+  .play-btn {
+    width: 56px;
+    height: 56px;
+  }
+  main.container {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+}
+
 /* Visualizer styling */
 #visualizer {
   width: 100%;
@@ -156,4 +188,15 @@ input[type="range"]::-webkit-slider-thumb {
 }
 .accent-text {
   color: var(--accent);
+}
+
+/* Gentle dynamic background overlay that uses the accent color */
+body.dynamic-theme {
+  background-image:
+    radial-gradient(
+      circle at 10% 10%,
+      rgba(var(--accent-rgb), 0.06),
+      transparent 20%
+    ),
+    linear-gradient(180deg, rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.7));
 }

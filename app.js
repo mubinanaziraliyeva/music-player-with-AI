@@ -82,6 +82,7 @@ let currentIndex = 0,
   isShuffle = false,
   repeatMode = "off";
 let colorThief = null;
+let aiEnabled = true;
 
 function formatTime(s) {
   if (!s || isNaN(s)) return "0:00";
@@ -155,6 +156,12 @@ function loadTrack(idx) {
             "--accent",
             `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`,
           );
+        // also set numeric rgb parts for gradients
+        document.documentElement.style.setProperty(
+          "--accent-rgb",
+          `${rgb[0]},${rgb[1]},${rgb[2]}`,
+        );
+        document.body.classList.add("dynamic-theme");
       }
     } catch (e) {}
     tryInitVisualizer();
@@ -162,6 +169,10 @@ function loadTrack(idx) {
   document
     .querySelectorAll("#playlist li")
     .forEach((li, i) => li.classList.toggle("bg-gray-800/30", i === idx));
+  // mark recommended items in the playlist for current track
+  try {
+    markRecommendations();
+  } catch (e) {}
 }
 
 function renderPlaylist() {
@@ -173,6 +184,55 @@ function renderPlaylist() {
     li.innerHTML = `<img src="${encodeURI(t.cover)}" class="w-12 h-12 rounded-md object-cover" /><div class="flex-1"><div class="font-medium">${t.title}</div></div><div class="text-sm text-gray-400">${i + 1}</div>`;
     li.addEventListener("click", () => crossfadeTo(i));
     playlistEl.appendChild(li);
+  });
+}
+
+// Simple AI recommendation: token overlap scoring
+function tokenizeTitle(title) {
+  return title
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
+}
+function getRecommendations(idx, limit = 3) {
+  const base = tracks[idx];
+  const tokens = tokenizeTitle(base.title);
+  const scores = tracks.map((t, i) => {
+    if (i === idx) return { i, score: -1 };
+    const other = tokenizeTitle(t.title);
+    // count common tokens
+    const common = tokens.filter((x) => other.includes(x)).length;
+    // prefer same artist (if title contains ' - ')
+    const sameArtist =
+      base.title.split(" - ")[0] === t.title.split(" - ")[0] ? 2 : 0;
+    return { i, score: common + sameArtist + Math.random() * 0.2 };
+  });
+  scores.sort((a, b) => b.score - a.score);
+  return scores.slice(0, limit).map((s) => s.i);
+}
+
+// Expose AI toggle button behavior
+const aiToggleBtn = document.getElementById("aiToggle");
+if (aiToggleBtn) {
+  aiToggleBtn.classList.toggle("text-green-400", aiEnabled);
+  aiToggleBtn.addEventListener("click", () => {
+    aiEnabled = !aiEnabled;
+    aiToggleBtn.classList.toggle("text-green-400", aiEnabled);
+  });
+}
+
+// Mark recommended items in playlist (visual aid)
+function markRecommendations() {
+  const recs = getRecommendations(currentIndex, 5);
+  const lis = playlistEl.querySelectorAll("li");
+  lis.forEach((li, i) => {
+    li.querySelectorAll(".rec-badge").forEach((n) => n.remove());
+    if (recs.includes(i)) {
+      const span = document.createElement("span");
+      span.className = "rec-badge text-xs text-green-300 ml-2";
+      span.textContent = "Recommended";
+      li.querySelector(".flex-1").appendChild(span);
+    }
   });
 }
 
@@ -352,6 +412,16 @@ audio.addEventListener("ended", () => {
   if (isShuffle) {
     crossfadeTo(Math.floor(Math.random() * tracks.length));
     return;
+  }
+  // If AI recommendations enabled, pick a recommended next track
+  if (aiEnabled) {
+    const recs = getRecommendations(currentIndex, 5).filter(
+      (i) => i !== currentIndex,
+    );
+    if (recs && recs.length > 0) {
+      crossfadeTo(recs[0]);
+      return;
+    }
   }
   if (repeatMode === "all") {
     crossfadeTo((currentIndex + 1) % tracks.length);

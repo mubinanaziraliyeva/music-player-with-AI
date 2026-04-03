@@ -103,7 +103,7 @@
 
               <button
                 id="playBtn"
-                class="bg-green-400 text-black rounded-full w-16 h-16 flex items-center justify-center shadow-lg"
+                class="play-btn rounded-full w-16 h-16 flex items-center justify-center shadow-lg"
                 title="Play/Pause"
               >
                 <i id="playIcon" class="fa-solid fa-play"></i>
@@ -175,7 +175,18 @@
       <aside
         class="bg-gradient-to-br from-[#071015]/60 to-[#0f1519]/60 rounded-2xl p-4 backdrop-blur-md border border-gray-800 shadow-lg"
       >
-        <h3 class="text-lg font-semibold mb-4">Playlist</h3>
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="text-lg font-semibold">Playlist</h3>
+          <div class="flex items-center gap-2">
+            <button
+              id="aiToggle"
+              class="btn btn-ghost text-sm"
+              title="Toggle AI Recommendations"
+            >
+              AI Recs
+            </button>
+          </div>
+        </div>
         <ul id="playlist" class="space-y-3 overflow-y-auto max-h-[60vh] pr-2">
           <!-- JS will populate playlist -->
         </ul>
@@ -190,6 +201,5 @@
     <!-- ColorThief for extracting dominant colors from covers -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/color-thief/2.3.2/color-thief.umd.js"></script>
     <script src="app.js" defer></script>
-    <script src="script.js"></script>
   </body>
 </html>
