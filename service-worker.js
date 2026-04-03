@@ -1,4 +1,4 @@
-const CACHE_NAME = "music-player-cache-v1";
+const CACHE_NAME = "music-player-cache-v2";
 const ASSETS = ["/", "/index.html", "/styles.css", "/app.js", "/manifest.json"];
 
 self.addEventListener("install", (event) => {
@@ -21,6 +21,13 @@ self.addEventListener("activate", (event) => {
       )
       .then(() => self.clients.claim()),
   );
+});
+
+// Allow the page to send a message to skip waiting and activate new SW immediately
+self.addEventListener("message", (event) => {
+  if (event.data && event.data.type === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
 });
 
 self.addEventListener("fetch", (event) => {

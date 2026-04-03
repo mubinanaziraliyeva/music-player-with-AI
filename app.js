@@ -24,17 +24,27 @@ const tracks = [
     cover: "Cover/Neoni - Darkside.jpg",
   },
   { title: "Tattoo", file: "Music/Tattoo.mp3", cover: "Cover/Tattoo.jpg" },
-  {
-    title: "Matadora",
-    file: "Music/MATADORA.mp3",
-    cover: "Cover/MATADORA.jpg",
-  },
-  {
-    title: "Rampampam",
-    file: "Music/Rampampam.mp3",
-    cover: "Cover/Rampampam.jpg",
-  },
 ];
+
+// Ensure known local tracks are present (useful if file was edited manually)
+(() => {
+  const required = [
+    {
+      title: "Matadora",
+      file: "Music/MATADORA.mp3",
+      cover: "Cover/MATADORA.jpg",
+    },
+    {
+      title: "Rampampam",
+      file: "Music/Rampampam.mp3",
+      cover: "Cover/Rampampam.jpg",
+    },
+  ];
+  required.forEach((r) => {
+    const exists = tracks.some((t) => t.title === r.title && t.file === r.file);
+    if (!exists) tracks.push(r);
+  });
+})();
 
 // DOM refs
 const coverEl = document.getElementById("cover");
