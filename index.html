@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Music Player — Spotify Style (Dark)</title>
+    <title>Music Player</title>
 
     <!-- Google Font -->
     <link
@@ -22,7 +22,7 @@
       rel="stylesheet"
       href="https://cdn.jsdelivr.net/npm/daisyui@2.51.6/dist/full.css"
     />
-
+    <!-- style.css -->
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body class="bg-[#0b0f12] text-gray-200 font-montserrat">
@@ -76,6 +76,12 @@
                 value="0"
                 class="w-full h-2 bg-gray-700 rounded-lg accent-green-400"
               />
+              <!-- Visualizer canvas -->
+              <canvas
+                id="visualizer"
+                class="w-full mt-3 rounded-md"
+                height="90"
+              ></canvas>
             </div>
 
             <!-- Controls -->
@@ -181,6 +187,9 @@
       and modern controls.
     </footer>
 
-    <script src="script.js" defer></script>
+    <!-- ColorThief for extracting dominant colors from covers -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/color-thief/2.3.2/color-thief.umd.js"></script>
+    <script src="app.js" defer></script>
+    <script src="script.js"></script>
   </body>
 </html>

@@ -33,16 +33,51 @@ const tracks = [
     file: "Music/Tattoo.mp3",
     cover: "Cover/Tattoo.jpg",
   },
+  {
+    title: "Matadora",
+    file: "Music/MATADORA.mp3",
+    cover: "Cover/MATADORA.jpg",
+  },
+  {
+    title: "Rampampam",
+    file: "Music/Rampampam.mp3",
+    cover: "Cover/Rampampam.jpg",
+  },
 ];
 
 // DOM elementlar
-const coverEl = document.getElementById("cover");
-const titleEl = document.getElementById("title");
+const audio = new Audio();
+audio.preload = "metadata";
+
+// Web Audio API setup for gain (fade) and analyser (visualizer)
+let audioCtx = null;
+let trackSource = null;
+let gainNode = null;
+let analyser = null;
+let dataArray = null;
+let bufferLength = 0;
+
+function ensureAudioContext(){
+  if(!audioCtx){
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    trackSource = audioCtx.createMediaElementSource(audio);
+    gainNode = audioCtx.createGain();
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 256;
+    bufferLength = analyser.frequencyBinCount;
+    dataArray = new Uint8Array(bufferLength);
+    // Connect nodes: source -> gain -> analyser -> destination
+    trackSource.connect(gainNode);
+    gainNode.connect(analyser);
+    analyser.connect(audioCtx.destination);
+  }
+}
 const artistEl = document.getElementById("artist");
 const playBtn = document.getElementById("playBtn");
 const playIcon = document.getElementById("playIcon");
 const prevBtn = document.getElementById("prevBtn");
 const nextBtn = document.getElementById("nextBtn");
+let colorThief = null;
 const shuffleBtn = document.getElementById("shuffleBtn");
 const repeatBtn = document.getElementById("repeatBtn");
 const progress = document.getElementById("progress");
@@ -53,48 +88,103 @@ const playlistEl = document.getElementById("playlist");
 const volToggle = document.getElementById("volToggle");
 const volMinus = document.getElementById("volMinus");
 const volPlus = document.getElementById("volPlus");
-const volumeWrap = document.getElementById("volumeWrap");
+  audio.src = encodeURI(t.file);
 const coverContainer = document.getElementById("coverContainer");
 
 // Audio obyekti
 const audio = new Audio();
 audio.preload = "metadata";
+  // Update document title for SEO / tab
+  document.title = `${parts.length>1 ? parts[0] + ' - ' : ''}${t.title}`;
+
+  // Save last played track
+  try{ localStorage.setItem('mp_lastIndex', index); }catch(e){}
+
+  // Update accent color when cover loads (use ColorThief if available)
+  coverEl.onload = () => {
+    try{
+      if(window.ColorThief){
+        colorThief = colorThief || new ColorThief();
+        // getColor may throw if image not loaded or cross-origin
+        const rgb = colorThief.getColor(coverEl);
+        if(rgb && rgb.length>=3){
+          const css = `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
+          document.documentElement.style.setProperty('--accent', css);
+          // update play button background subtly
+          playBtn.style.background = css;
+          playBtn.style.color = '#000';
+        }
+      }
+    }catch(e){/* ignore color extraction errors */}
+  };
 
 // Holat (state)
 let currentIndex = 0;
 let isPlaying = false;
-let isShuffle = false;
-let repeatMode = "off"; // off, one, all
-
-// Yordamchi funksiyalar
-function formatTime(seconds) {
+  ensureAudioContext();
+  if (audioCtx.state === 'suspended') { audioCtx.resume(); }
+  if (!isPlaying) {
+    audio.play();
+  } else {
+    audio.pause();
+  }
   const m = Math.floor(seconds / 60) || 0;
   const s = Math.floor(seconds % 60) || 0;
   return `${m}:${s.toString().padStart(2, "0")}`;
-}
-
-// Trackni yuklash
-function loadTrack(index) {
-  const t = tracks[index];
-  // file pathlarni safe qilib encode qilish (agar fayl nomlarida bo'shliq bo'lsa)
-  audio.src = encodeURI(t.file);
+  // crossfade to next
+  let nextIndex;
+  if (isShuffle) nextIndex = Math.floor(Math.random() * tracks.length);
+  else nextIndex = (currentIndex + 1) % tracks.length;
+  crossfadeTo(nextIndex);
   titleEl.textContent = t.title;
   // artist - oddiy qilib fayl nomidan ajratamiz (agar format 'Artist - Title' bo'lsa)
   const parts = t.title.split(" - ");
   artistEl.textContent = parts.length > 1 ? parts[0] : "Unknown Artist";
   coverEl.src = encodeURI(t.cover);
 
-  // playlistda current itemni ko'rsatish
-  document.querySelectorAll("#playlist li").forEach((li, i) => {
-    li.classList.toggle("bg-gray-800/30", i === index);
+    const prev = (currentIndex - 1 + tracks.length) % tracks.length;
+    crossfadeTo(prev);
   });
 }
 
 // Play/Pause toggle
-function togglePlay() {
+  // use gain node if available for smooth control
+  if(gainNode){
+    gainNode.gain.setValueAtTime(v, audioCtx.currentTime);
+  } else {
+    audio.volume = v;
+  }
+  try{ localStorage.setItem('mp_volume', v); }catch(e){}
   if (!isPlaying) {
     audio.play();
   } else {
+function fadeTo(value, duration = 0.4){
+  if(!gainNode || !audioCtx) return;
+  const now = audioCtx.currentTime;
+  gainNode.gain.cancelScheduledValues(now);
+  gainNode.gain.setValueAtTime(gainNode.gain.value, now);
+  gainNode.gain.linearRampToValueAtTime(value, now + duration);
+}
+
+function crossfadeTo(index){
+  ensureAudioContext();
+  if(!gainNode) { loadTrack(index); audio.play(); return; }
+  // fade out current
+  fadeTo(0.0001, 0.25);
+  setTimeout(()=>{
+    currentIndex = index;
+    loadTrack(currentIndex);
+    // ensure audio context resumed
+    if(audioCtx.state === 'suspended') audioCtx.resume();
+    // set initial tiny volume and play
+    if(gainNode) gainNode.gain.setValueAtTime(0.0001, audioCtx.currentTime);
+    audio.play().then(()=>{
+      // fade in to last saved volume or 0.8
+      const vol = parseFloat(localStorage.getItem('mp_volume') || volumeEl.value || 0.8);
+      fadeTo(vol, 0.4);
+    }).catch(()=>{});
+  }, 260);
+}
     audio.pause();
   }
 }
@@ -111,9 +201,8 @@ function nextTrack() {
 }
 
 // Previous track
-function prevTrack() {
-  if (audio.currentTime > 3) {
-    audio.currentTime = 0;
+      // crossfade to chosen
+      crossfadeTo(i);
   } else {
     currentIndex = (currentIndex - 1 + tracks.length) % tracks.length;
     loadTrack(currentIndex);
@@ -123,7 +212,7 @@ function prevTrack() {
 
 // Toggle shuffle
 function toggleShuffle() {
-  isShuffle = !isShuffle;
+  setVolume(parseFloat(e.target.value));
   shuffleBtn.classList.toggle("text-green-400", isShuffle);
 }
 
@@ -134,6 +223,8 @@ function toggleRepeat() {
     repeatBtn.classList.add("text-green-400");
     repeatBtn.title = "Repeat: All";
   } else if (repeatMode === "all") {
+  // ensure audio context active
+  try{ ensureAudioContext(); if(audioCtx && audioCtx.state === 'suspended') audioCtx.resume(); }catch(e){}
     repeatMode = "one";
     repeatBtn.title = "Repeat: One";
   } else {
@@ -174,7 +265,71 @@ function showVolumeTemporarily() {
   _volHideTimer = setTimeout(() => volumeWrap.classList.add("hidden"), 2000);
 }
 
-// Playlist rendering
+
+// Load saved volume/index from localStorage
+try{
+  const savedIndex = parseInt(localStorage.getItem('mp_lastIndex'));
+  if(!isNaN(savedIndex) && savedIndex >=0 && savedIndex < tracks.length){ currentIndex = savedIndex; loadTrack(currentIndex); }
+}catch(e){}
+try{
+  const savedV = parseFloat(localStorage.getItem('mp_volume'));
+  if(!isNaN(savedV)){
+    volumeEl.value = savedV;
+  }
+}catch(e){}
+setVolume(parseFloat(volumeEl.value));
+
+// Init visualizer if possible
+tryInitVisualizer();
+
+// Visualizer: Canvas drawing using analyser
+const canvas = document.getElementById('visualizer');
+let canvasCtx = null;
+function initVisualizer(){
+  if(!canvas) return;
+  canvasCtx = canvas.getContext('2d');
+  canvasCtx.clearRect(0,0,canvas.width, canvas.height);
+  function draw(){
+    requestAnimationFrame(draw);
+    if(!analyser) return;
+    analyser.getByteFrequencyData(dataArray);
+    const w = canvas.width;
+    const h = canvas.height;
+    canvasCtx.fillStyle = 'rgba(0,0,0,0.08)';
+    canvasCtx.fillRect(0,0,w,h);
+    const barWidth = (w / bufferLength) * 1.5;
+    let x = 0;
+    for(let i=0;i<bufferLength;i++){
+      const v = dataArray[i] / 255;
+      const y = v * h;
+      // gradient using accent color
+      const grad = canvasCtx.createLinearGradient(0,0,0,h);
+      const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent') || '#10b981';
+      grad.addColorStop(0, accent.trim());
+      grad.addColorStop(1, 'rgba(255,255,255,0.04)');
+      canvasCtx.fillStyle = grad;
+      canvasCtx.fillRect(x, h - y, barWidth, y);
+      x += barWidth + 1;
+    }
+  }
+  draw();
+}
+
+// Kickstart visualizer when analyser exists
+function tryInitVisualizer(){
+  ensureAudioContext();
+  if(analyser){
+    bufferLength = analyser.frequencyBinCount;
+    dataArray = new Uint8Array(bufferLength);
+    // set canvas width based on element computed width
+    if(canvas){
+      const rect = canvas.getBoundingClientRect();
+      canvas.width = Math.floor(rect.width);
+      canvas.height = 90;
+      initVisualizer();
+    }
+  }
+}
 function renderPlaylist() {
   playlistEl.innerHTML = "";
   tracks.forEach((t, i) => {

@@ -3,6 +3,7 @@
 
 :root {
   --glass-bg: rgba(255, 255, 255, 0.04);
+  --accent: #10b981;
 }
 
 body {
@@ -18,7 +19,7 @@ body {
 
 /* Glassmorphism card effect */
 .backdrop-blur-md {
-  backdrop-filter: blur(8px);
+  backdrop-filter: blur(10px);
 }
 
 /* Rotating animation when playing */
@@ -117,4 +118,42 @@ input[type="range"]::-webkit-slider-thumb {
   opacity: 1;
   transform: translateY(0);
   pointer-events: auto;
+}
+
+/* Button hover / focus glow */
+.btn-ghost,
+.btn {
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    background-color 0.15s ease;
+}
+.btn-ghost:hover,
+.btn:hover,
+.btn-ghost:focus,
+.btn:focus {
+  transform: translateY(-3px) scale(1.03);
+  box-shadow:
+    0 6px 22px rgba(16, 185, 129, 0.12),
+    0 2px 6px rgba(0, 0, 0, 0.6);
+}
+
+/* Visualizer styling */
+#visualizer {
+  width: 100%;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.02),
+    rgba(255, 255, 255, 0.01)
+  );
+  border-radius: 8px;
+  display: block;
+}
+
+/* Accent color var usage */
+.accent-bg {
+  background-color: var(--accent);
+}
+.accent-text {
+  color: var(--accent);
 }
