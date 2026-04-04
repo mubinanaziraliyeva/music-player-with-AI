@@ -32,9 +32,7 @@
   </head>
   <body class="bg-[#0b0f12] text-gray-200 font-montserrat">
     <header class="p-4">
-      <h1 class="text-2xl font-bold text-green-400">
-        Music Player — Spotify Style
-      </h1>
+      <h1 class="text-2xl font-bold text-green-400">Music Player</h1>
     </header>
 
     <main
@@ -115,11 +113,21 @@
 
           <!-- Track Info and Controls -->
           <div class="flex-1 w-full">
-            <div class="mb-4">
-              <h2 id="title" class="text-2xl font-semibold">
-                Alan Walker - Darkside
-              </h2>
-              <p id="artist" class="text-sm text-gray-400">Artist</p>
+            <div class="flex justify-between mb-4">
+              <div>
+                <h2 id="title" class="text-2xl font-semibold">
+                  Alan Walker - Darkside
+                </h2>
+                <p id="artist" class="text-sm text-gray-400">Artist</p>
+              </div>
+              <!-- Like / Heart button -->
+              <button
+                id="likeBtn"
+                class="btn btn-ghost text-2xl"
+                title="Like this track"
+              >
+                <i id="likeIcon" class="fa-regular fa-heart"></i>
+              </button>
             </div>
 
             <!-- Progress -->
@@ -145,61 +153,7 @@
                 height="90"
               ></canvas>
 
-              <!-- Lyrics display -->
-              <div
-                id="lyricsContainer"
-                class="mt-4 p-0 rounded-md glass-card"
-                style="max-height: 180px; overflow: hidden"
-              >
-                <div
-                  class="flex items-center justify-between p-3 border-b border-white/6"
-                >
-                  <div class="text-sm font-semibold">Lyrics</div>
-                  <div class="flex items-center gap-2">
-                    <span id="lyricsStatus" class="text-xs text-gray-400"
-                      >No lyrics loaded</span
-                    >
-                    <button
-                      id="lyricOffsetMinus"
-                      class="btn btn-ghost btn-xs"
-                      title="Shift lyrics earlier"
-                    >
-                      -0.2s
-                    </button>
-                    <span id="lyricOffsetValue" class="text-xs text-green-300"
-                      >0.0s</span
-                    >
-                    <button
-                      id="lyricOffsetPlus"
-                      class="btn btn-ghost btn-xs"
-                      title="Shift lyrics later"
-                    >
-                      +0.2s
-                    </button>
-                    <button
-                      id="saveOffsetBtn"
-                      class="btn btn-ghost btn-xs"
-                      title="Save offset"
-                    >
-                      Save
-                    </button>
-                    <button
-                      id="autoTuneBtn"
-                      class="btn btn-ghost btn-xs"
-                      title="Auto-tune offset"
-                    >
-                      Auto-tune
-                    </button>
-                    <button id="toggleLyricsBtn" class="btn btn-ghost btn-sm">
-                      Hide
-                    </button>
-                  </div>
-                </div>
-                <div
-                  id="lyricsContent"
-                  style="padding: 8px; max-height: 132px; overflow-y: auto"
-                ></div>
-              </div>
+              <!-- Lyrics display removed from here; static lyrics will be shown under volume controls -->
             </div>
 
             <!-- Controls -->
@@ -211,6 +165,7 @@
               >
                 <i class="fa-solid fa-shuffle"></i>
               </button>
+
               <button
                 id="prevBtn"
                 class="btn btn-ghost text-gray-300 text-2xl"
@@ -227,15 +182,6 @@
                 <i id="playIcon" class="fa-solid fa-play"></i>
               </button>
 
-              <!-- Like / Heart button -->
-              <button
-                id="likeBtn"
-                class="btn btn-ghost text-2xl"
-                title="Like this track"
-              >
-                <i id="likeIcon" class="fa-regular fa-heart"></i>
-              </button>
-
               <button
                 id="nextBtn"
                 class="btn btn-ghost text-gray-300 text-2xl"
@@ -250,11 +196,8 @@
               >
                 <i class="fa-solid fa-repeat"></i>
               </button>
+              <!-- moved Like button to follow the forward button per user request -->
             </div>
-
-            <!-- Equalizer controls -->
-            <!-- EQ moved beside cover for desktop; if JS finds #eqContainerMobile it will be hidden on large screens -->
-            <div class="hidden md:block" id="eqContainerDesktop">...</div>
 
             <!-- Volume (vertical, hidden until toggled) -->
             <div class="mt-6 relative">
@@ -296,6 +239,30 @@
                   value="0.8"
                   class="vertical-slider"
                 />
+              </div>
+            </div>
+            <!-- Static lyrics block: simplified and only "Hide" control in header -->
+            <div
+              id="lyricsContainer"
+              class="mt-4 p-0 rounded-md glass-card"
+              style="max-height: 500px"
+            >
+              <div
+                class="flex items-center justify-between p-2 border-b border-white/6"
+              >
+                <div class="text-sm font-semibold">Lyrics</div>
+                <div>
+                  <button id="toggleLyricsBtn" class="btn btn-ghost btn-sm">
+                    Hide
+                  </button>
+                </div>
+              </div>
+              <div
+                id="lyricsContent"
+                class="static-lyrics p-4"
+                style="max-height: 180px; overflow-y: auto"
+              >
+                No lyrics available
               </div>
             </div>
           </div>

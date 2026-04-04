@@ -88,6 +88,8 @@ const lyricsContainerEl = document.getElementById("lyricsContainer");
 const lyricsContentEl = document.getElementById("lyricsContent");
 const lyricsStatusEl = document.getElementById("lyricsStatus");
 const toggleLyricsBtn = document.getElementById("toggleLyricsBtn");
+// staticLyricsMode: when true, render static (non-synced) lyrics and disable highlight updates
+let staticLyricsMode = true;
 const lyricOffsetMinusBtn = document.getElementById("lyricOffsetMinus");
 const lyricOffsetPlusBtn = document.getElementById("lyricOffsetPlus");
 const lyricOffsetValueEl = document.getElementById("lyricOffsetValue");
@@ -861,33 +863,47 @@ function renderLyrics(lyrics) {
     lyricsContentEl.appendChild(p);
     return;
   }
-  lyrics.forEach((ln, i) => {
-    const div = document.createElement("div");
-    div.className = "lyric-line";
-    div.setAttribute("data-idx", String(i));
-    div.textContent = ln.text || "";
-    // click-to-seek: jump to lyric time when available
-    div.style.cursor = "pointer";
-    div.addEventListener("click", (e) => {
-      try {
-        if (typeof ln.time === "number" && isFinite(ln.time)) {
-          const ttrack = tracks[currentIndex] || {};
-          const off = Number(ttrack._syncOffset || 0);
-          audio.currentTime = Math.max(0, ln.time + off);
-          // ensure playing after seek
-          try {
-            if (audio.paused) audio.play().catch(() => {});
-          } catch (e) {}
-        }
-      } catch (e) {}
+  if (staticLyricsMode) {
+    // Render static, readable lyrics (one paragraph per line)
+    const frag = document.createDocumentFragment();
+    lyrics.forEach((ln) => {
+      const p = document.createElement("div");
+      p.className = "lyric-line";
+      p.textContent = ln.text || "";
+      frag.appendChild(p);
     });
-    lyricsContentEl.appendChild(div);
-  });
+    lyricsContentEl.appendChild(frag);
+  } else {
+    // interactive (legacy) rendering with clickable lines
+    lyrics.forEach((ln, i) => {
+      const div = document.createElement("div");
+      div.className = "lyric-line";
+      div.setAttribute("data-idx", String(i));
+      div.textContent = ln.text || "";
+      // click-to-seek: jump to lyric time when available
+      div.style.cursor = "pointer";
+      div.addEventListener("click", (e) => {
+        try {
+          if (typeof ln.time === "number" && isFinite(ln.time)) {
+            const ttrack = tracks[currentIndex] || {};
+            const off = Number(ttrack._syncOffset || 0);
+            audio.currentTime = Math.max(0, ln.time + off);
+            try {
+              if (audio.paused) audio.play().catch(() => {});
+            } catch (e) {}
+          }
+        } catch (e) {}
+      });
+      lyricsContentEl.appendChild(div);
+    });
+  }
   // reset current highlighted index when new lyrics loaded
   currentLyricIndex = -1;
   if (lyricsStatusEl && lyrics && lyrics.length) {
     // show approximate lines count
-    lyricsStatusEl.textContent = `${lyrics.length} lines`;
+    // when static mode show total lines briefly in status
+    if (staticLyricsMode) lyricsStatusEl.textContent = `${lyrics.length} lines`;
+    else lyricsStatusEl.textContent = `${lyrics.length} lines`;
   }
 }
 
@@ -1133,7 +1149,7 @@ function updateProgress() {
     durationEl.textContent = formatTime(audio.duration);
     // update synchronized lyrics highlight
     try {
-      updateLyricsHighlight(audio.currentTime);
+      if (!staticLyricsMode) updateLyricsHighlight(audio.currentTime);
     } catch (e) {}
   }
 }
@@ -1357,6 +1373,14 @@ audio.addEventListener("play", () => {
   playIcon.classList.add("fa-pause");
   coverEl.classList.add("playing-rotate");
   if (coverContainer) coverContainer.classList.add("cover-active");
+  // also expand the overall player card slightly for a cohesive zoom effect
+  try {
+    const card =
+      coverContainer &&
+      coverContainer.closest &&
+      coverContainer.closest(".player-card");
+    if (card) card.classList.add("player-card-expanded");
+  } catch (e) {}
   try {
     playBtn.classList.add("playing");
   } catch (e) {}
@@ -1374,6 +1398,13 @@ audio.addEventListener("pause", () => {
   playIcon.classList.add("fa-play");
   coverEl.classList.remove("playing-rotate");
   if (coverContainer) coverContainer.classList.remove("cover-active");
+  try {
+    const card =
+      coverContainer &&
+      coverContainer.closest &&
+      coverContainer.closest(".player-card");
+    if (card) card.classList.remove("player-card-expanded");
+  } catch (e) {}
   try {
     playBtn.classList.remove("playing");
   } catch (e) {}
@@ -1476,7 +1507,7 @@ function rafTick() {
     }
     // update lyrics highlight each frame for smoother sync
     try {
-      if (audio) updateLyricsHighlight(audio.currentTime);
+      if (!staticLyricsMode && audio) updateLyricsHighlight(audio.currentTime);
     } catch (e) {}
   } catch (e) {}
   _rafId = requestAnimationFrame(rafTick);

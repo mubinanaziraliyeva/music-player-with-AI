@@ -245,6 +245,27 @@ body {
 .player-card {
   animation: float 8s ease-in-out infinite;
 }
+/* when cover is active, slightly enlarge the player card */
+.player-card.player-card-expanded {
+  transform: scale(1.02);
+  transition: transform 260ms cubic-bezier(0.2, 0.9, 0.2, 1);
+}
+
+/* prevent content overflow when elements scale */
+.player-card {
+  overflow: hidden;
+}
+
+/* allow flex children to shrink so the progress and controls don't overflow */
+.player-card .flex-1 {
+  min-width: 0;
+}
+
+/* ensure progress input doesn't exceed its container */
+#progress {
+  max-width: 100%;
+  box-sizing: border-box;
+}
 @keyframes float {
   0% {
     transform: translateY(0px);
@@ -508,6 +529,63 @@ body::before {
     color 0.7s ease,
     box-shadow 0.7s ease,
     border-color 0.7s ease;
+}
+
+/* Volume button visual upgrade (live, rounded, neon accent) */
+#volMinus,
+#volToggle,
+#volPlus {
+  background: linear-gradient(
+    180deg,
+    rgba(16, 185, 129, 0.12),
+    rgba(16, 185, 129, 0.06)
+  );
+  border-radius: 9999px;
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease,
+    background 160ms ease;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+}
+#volMinus i,
+#volToggle i,
+#volPlus i {
+  color: rgba(255, 255, 255, 0.9);
+}
+#volMinus:hover,
+#volToggle:hover,
+#volPlus:hover {
+  transform: translateY(-3px) scale(1.02);
+  box-shadow: 0 10px 30px rgba(var(--accent-rgb), 0.12);
+  background: linear-gradient(
+    180deg,
+    rgba(16, 185, 129, 0.18),
+    rgba(16, 185, 129, 0.08)
+  );
+}
+
+/* Static lyrics appearance (simple, elegant) */
+.static-lyrics {
+  font-size: 15px;
+  color: rgba(255, 255, 255, 0.9);
+  line-height: 1.7;
+  text-align: center;
+}
+.static-lyrics .lyric-line {
+  padding: 6px 8px;
+  margin: 4px 0;
+  border-radius: 6px;
+}
+
+/* Make Hide button minimal and subtle */
+#toggleLyricsBtn {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.04);
 }
 
 /* small accessible focus ring */
