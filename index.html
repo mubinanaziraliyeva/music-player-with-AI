@@ -97,6 +97,31 @@
                 class="w-full mt-3 rounded-md"
                 height="90"
               ></canvas>
+
+              <!-- Lyrics display -->
+              <div
+                id="lyricsContainer"
+                class="mt-4 p-0 rounded-md glass-card"
+                style="max-height: 180px; overflow: hidden"
+              >
+                <div
+                  class="flex items-center justify-between p-3 border-b border-white/6"
+                >
+                  <div class="text-sm font-semibold">Lyrics</div>
+                  <div class="flex items-center gap-2">
+                    <span id="lyricsStatus" class="text-xs text-gray-400"
+                      >No lyrics loaded</span
+                    >
+                    <button id="toggleLyricsBtn" class="btn btn-ghost btn-sm">
+                      Hide
+                    </button>
+                  </div>
+                </div>
+                <div
+                  id="lyricsContent"
+                  style="padding: 8px; max-height: 132px; overflow-y: auto"
+                ></div>
+              </div>
             </div>
 
             <!-- Controls -->

@@ -26,6 +26,19 @@ const tracks = [
   { title: "Tattoo", file: "Music/Tattoo.mp3", cover: "Cover/Tattoo.jpg" },
 ];
 
+// Player state
+let currentIndex = 0;
+let isPlaying = false;
+let isShuffle = false;
+let repeatMode = "off"; // off | all | one
+let aiEnabled = true;
+let likedTracks = new Set();
+try {
+  const raw = localStorage.getItem("mp_likes");
+  if (raw) JSON.parse(raw).forEach((k) => likedTracks.add(String(k)));
+} catch (e) {}
+const trackMood = {};
+
 // Ensure known local tracks are present (useful if file was edited manually)
 (() => {
   const required = [
@@ -71,6 +84,17 @@ const playlistEl = document.getElementById("playlist");
 const canvas = document.getElementById("visualizer");
 const uploadInput = document.getElementById("uploadInput");
 const aiAnalysisEl = document.getElementById("aiAnalysis");
+const lyricsContainerEl = document.getElementById("lyricsContainer");
+const lyricsContentEl = document.getElementById("lyricsContent");
+const lyricsStatusEl = document.getElementById("lyricsStatus");
+const toggleLyricsBtn = document.getElementById("toggleLyricsBtn");
+
+if (toggleLyricsBtn && lyricsContentEl) {
+  toggleLyricsBtn.addEventListener("click", () => {
+    const hidden = lyricsContentEl.classList.toggle("hidden");
+    toggleLyricsBtn.textContent = hidden ? "Show" : "Hide";
+  });
+}
 
 // Audio + WebAudio
 const audio = new Audio();
@@ -94,12 +118,14 @@ function ensureAudioContext() {
     } catch (e) {
       console.warn(e);
     }
-    // create nodes: eq chain -> gain -> analyser -> destination
     gainNode = audioCtx.createGain();
     analyser = audioCtx.createAnalyser();
-    analyser.fftSize = 512;
+    // Higher resolution and smooth movement for HD visualizer
+    analyser.fftSize = 1024;
+    analyser.smoothingTimeConstant = 0.85;
     bufferLength = analyser.frequencyBinCount;
     dataArray = new Uint8Array(bufferLength);
+
     // EQ nodes
     eqLow = audioCtx.createBiquadFilter();
     eqLow.type = "lowshelf";
@@ -111,6 +137,7 @@ function ensureAudioContext() {
     eqHigh = audioCtx.createBiquadFilter();
     eqHigh.type = "highshelf";
     eqHigh.frequency.value = 3000;
+
     if (sourceNode) sourceNode.connect(eqLow);
     eqLow.connect(eqMid);
     eqMid.connect(eqHigh);
@@ -120,30 +147,99 @@ function ensureAudioContext() {
   }
 }
 
-let currentIndex = 0,
-  isPlaying = false,
-  isShuffle = false,
-  repeatMode = "off";
-let colorThief = null;
-let aiEnabled = true;
-// Liked tracks set
-let likedTracks = new Set();
-try {
-  const raw = localStorage.getItem("mp_likes");
-  if (raw) {
-    JSON.parse(raw).forEach((i) => likedTracks.add(i));
-  }
-} catch (e) {}
-// mood cache per track index
-const trackMood = {};
+// Visualizer implementation (centered mirrored bars)
+let canvasCtx = null;
+function initVisualizer() {
+  if (!canvas) return;
+  ensureAudioContext();
+  if (!analyser) return;
+  canvasCtx = canvas.getContext("2d");
+  const resize = () => {
+    const r = canvas.getBoundingClientRect();
+    const ratio = window.devicePixelRatio || 1;
+    const cssWidth = Math.floor(r.width);
+    const cssHeight = 150; // fixed HD height
+    canvas.style.width = cssWidth + "px";
+    canvas.style.height = cssHeight + "px";
+    canvas.width = Math.floor(cssWidth * ratio);
+    canvas.height = Math.floor(cssHeight * ratio);
+    // set a device-pixel-ratio aware transform
+    canvasCtx.setTransform(ratio, 0, 0, ratio, 0, 0);
+  };
+  resize();
+  window.addEventListener("resize", resize);
 
-function formatTime(s) {
-  if (!s || isNaN(s)) return "0:00";
-  const m = Math.floor(s / 60);
-  const sec = Math.floor(s % 60)
-    .toString()
-    .padStart(2, "0");
-  return `${m}:${sec}`;
+  function draw() {
+    requestAnimationFrame(draw);
+    if (!analyser) return;
+    analyser.getByteFrequencyData(dataArray);
+    const ratio = window.devicePixelRatio || 1;
+    const w = canvas.width / ratio,
+      h = canvas.height / ratio;
+    // clear fully each frame for crisp bars
+    canvasCtx.clearRect(0, 0, w, h);
+
+    // center point
+    const cx = w / 2;
+
+    // number of bars per side
+    const barsPerSide = Math.min(80, Math.floor(bufferLength / 2));
+    const maxBarWidth = Math.max(2, Math.floor(w / 2 / barsPerSide));
+
+    // gradient from accent (bottom) to neon/white (top)
+    const accent =
+      getComputedStyle(document.documentElement).getPropertyValue("--accent") ||
+      "#10b981";
+    const neon = "#e6fffb";
+    const grad = canvasCtx.createLinearGradient(0, h, 0, 0);
+    grad.addColorStop(0, accent.trim());
+    grad.addColorStop(1, neon);
+
+    canvasCtx.fillStyle = grad;
+    canvasCtx.shadowBlur = 15;
+    canvasCtx.shadowColor = neon;
+
+    // draw mirrored bars from center outwards
+    for (let i = 0; i < barsPerSide; i++) {
+      const idx = Math.floor(i * (dataArray.length / (barsPerSide * 1.0)));
+      const v = (dataArray[idx] || 0) / 255; // 0..1
+      const barHeight = Math.min(h, v * h * 1.5);
+      const barW = Math.max(
+        2,
+        Math.floor(maxBarWidth - i * (maxBarWidth / barsPerSide)),
+      );
+
+      // left bar
+      const lx = Math.floor(cx - (i + 1) * (maxBarWidth + 1));
+      const ly = Math.floor(h - barHeight);
+      canvasCtx.fillRect(lx, ly, barW, barHeight);
+
+      // right mirrored bar
+      const rx = Math.floor(cx + i * (maxBarWidth + 1));
+      canvasCtx.fillRect(rx, ly, barW, barHeight);
+    }
+
+    // compute approximate bass for other UI effects (use first few bins)
+    const bassCount = Math.max(4, Math.floor(bufferLength * 0.06));
+    let bassSum = 0;
+    for (let b = 0; b < bassCount; b++) bassSum += dataArray[b] || 0;
+    const bassAvg = bassSum / (bassCount * 255);
+    const bass = Math.min(1, Math.max(0, bassAvg * 1.8));
+    document.documentElement.style.setProperty(
+      "--bass",
+      String(bass.toFixed(3)),
+    );
+  }
+  draw();
+}
+
+function tryInitVisualizer() {
+  ensureAudioContext();
+  if (analyser) {
+    bufferLength = analyser.frequencyBinCount;
+    dataArray = new Uint8Array(bufferLength);
+    initVisualizer();
+  }
 }
 
 function setVolume(v) {
@@ -232,12 +328,196 @@ function loadTrack(idx) {
     } catch (e) {}
   };
   coverEl.src = encodeURI(t.cover);
+  // load lyrics if available for this track
+  try {
+    loadLyricsForTrack(t);
+  } catch (e) {}
   document
     .querySelectorAll("#playlist li")
     .forEach((li, i) => li.classList.toggle("bg-gray-800/30", i === idx));
 }
 
+// --- Lyrics: LRC parser, loader and renderer ---
+function parseLRC(lrcText) {
+  const lines = lrcText.split(/\r?\n/);
+  const timeRe = /\[(\d{1,2}):(\d{2})(?:\.(\d{1,3}))?\]/g;
+  const out = [];
+  for (const line of lines) {
+    let match;
+    const times = [];
+    timeRe.lastIndex = 0;
+    while ((match = timeRe.exec(line)) !== null) {
+      const min = parseInt(match[1], 10);
+      const sec = parseInt(match[2], 10);
+      const ms = match[3] ? parseInt(match[3].padEnd(3, "0"), 10) : 0;
+      const time = min * 60 + sec + ms / 1000;
+      times.push(time);
+    }
+    const text = line.replace(timeRe, "").trim();
+    times.forEach((t) => out.push({ time: t, text }));
+  }
+  out.sort((a, b) => a.time - b.time);
+  return out;
+}
+
+async function loadLyricsForTrack(track) {
+  // Try flexible matching for LRC files in /Lyrics by title or filename
+  console.groupCollapsed &&
+    console.groupCollapsed(`lyrics: trying to load for "${track.title}"`);
+  console.debug &&
+    console.debug("loadLyricsForTrack candidates helper running");
+  const tryNames = [];
+  tryNames.push(track.title || "");
+  try {
+    tryNames.push(
+      (track.file || "")
+        .split("/")
+        .pop()
+        .replace(/\.[^/.]+$/, ""),
+    );
+  } catch (e) {}
+
+  function normalizeName(name) {
+    if (!name) return "";
+    return name
+      .toString()
+      .normalize("NFD")
+      .replace(/\p{Diacritic}/gu, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, "")
+      .trim()
+      .replace(/\s+/g, "_");
+  }
+
+  const candidates = [];
+  tryNames.forEach((n) => {
+    if (!n) return;
+    candidates.push(n);
+    candidates.push(normalizeName(n));
+    candidates.push(n.replace(/\s+/g, "_"));
+    candidates.push(encodeURIComponent(n));
+  });
+
+  // dedupe
+  const seen = new Set();
+  const uniq = candidates.filter((c) => {
+    if (!c) return false;
+    const key = c.toString();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  let found = false;
+  for (const c of uniq) {
+    console.debug && console.debug("trying candidate", c, `-> Lyrics/${c}.lrc`);
+    const url = `Lyrics/${c}.lrc`;
+    try {
+      const res = await fetch(url);
+      if (!res.ok) {
+        console.debug && console.debug("not found", url, res.status);
+        continue;
+      }
+      const txt = await res.text();
+      const parsed = parseLRC(txt);
+      track.lyrics = parsed;
+      renderLyrics(parsed);
+      if (lyricsStatusEl) lyricsStatusEl.textContent = `Loaded: ${c}.lrc`;
+      console.info &&
+        console.info(`lyrics: loaded ${c}.lrc (${parsed.length} lines)`);
+      found = true;
+      break;
+    } catch (e) {
+      console.warn &&
+        console.warn(
+          "lyrics fetch error for",
+          url,
+          e && e.message ? e.message : e,
+        );
+      // ignore and try next
+    }
+  }
+
+  if (!found) {
+    try {
+      const altUrl = `Lyrics/${encodeURIComponent(track.title)}.lrc`;
+      const res2 = await fetch(altUrl);
+      if (res2 && res2.ok) {
+        const txt2 = await res2.text();
+        const parsed2 = parseLRC(txt2);
+        track.lyrics = parsed2;
+        renderLyrics(parsed2);
+        if (lyricsStatusEl)
+          lyricsStatusEl.textContent = `Loaded: ${track.title}.lrc`;
+        found = true;
+      }
+    } catch (e) {}
+  }
+
+  if (!found) {
+    track.lyrics = [];
+    renderLyrics([]);
+    if (lyricsStatusEl) lyricsStatusEl.textContent = "No lyrics found";
+  }
+}
+
+function renderLyrics(lyrics) {
+  if (!lyricsContentEl) return;
+  lyricsContentEl.innerHTML = "";
+  if (!lyrics || !lyrics.length) {
+    const p = document.createElement("div");
+    p.className = "lyric-line muted";
+    p.textContent = "No lyrics available";
+    lyricsContentEl.appendChild(p);
+    return;
+  }
+  lyrics.forEach((ln, i) => {
+    const div = document.createElement("div");
+    div.className = "lyric-line";
+    div.setAttribute("data-idx", String(i));
+    div.textContent = ln.text || "";
+    lyricsContentEl.appendChild(div);
+  });
+  // reset current highlighted index when new lyrics loaded
+  currentLyricIndex = -1;
+  if (lyricsStatusEl && lyrics && lyrics.length) {
+    // show approximate lines count
+    lyricsStatusEl.textContent = `${lyrics.length} lines`;
+  }
+}
+
+let currentLyricIndex = -1;
+function updateLyricsHighlight(currentTime) {
+  const t = tracks[currentIndex];
+  if (!t || !t.lyrics || !t.lyrics.length) return;
+  const lyrics = t.lyrics;
+  // find last index where time <= currentTime
+  let idx = -1;
+  for (let i = 0; i < lyrics.length; i++) {
+    if (lyrics[i].time <= currentTime) idx = i;
+    else break;
+  }
+  if (idx === currentLyricIndex) return;
+  // remove old active
+  const prev =
+    lyricsContentEl && lyricsContentEl.querySelector(".lyric-line.active");
+  if (prev) prev.classList.remove("active");
+  currentLyricIndex = idx;
+  if (idx >= 0) {
+    const el =
+      lyricsContentEl &&
+      lyricsContentEl.querySelector(`.lyric-line[data-idx="${idx}"]`);
+    if (el) {
+      el.classList.add("active");
+      // smooth center scroll into view
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }
+}
+
+// Render playlist items into the sidebar
 function renderPlaylist() {
+  if (!playlistEl) return;
   playlistEl.innerHTML = "";
   tracks.forEach((t, i) => {
     const li = document.createElement("li");
@@ -257,12 +537,20 @@ function renderPlaylist() {
       </div>
     `;
     li.addEventListener("click", (e) => {
-      // avoid click when pressing like button
       if (e.target.closest(".track-like")) return;
       crossfadeTo(i);
     });
     playlistEl.appendChild(li);
   });
+}
+
+function formatTime(sec) {
+  if (!sec || isNaN(sec)) return "0:00";
+  const s = Math.floor(sec % 60)
+    .toString()
+    .padStart(2, "0");
+  const m = Math.floor(sec / 60);
+  return `${m}:${s}`;
 }
 
 // TF-IDF recommendation helpers
@@ -414,6 +702,10 @@ function updateProgress() {
     progress.value = p;
     currentTimeEl.textContent = formatTime(audio.currentTime);
     durationEl.textContent = formatTime(audio.duration);
+    // update synchronized lyrics highlight
+    try {
+      updateLyricsHighlight(audio.currentTime);
+    } catch (e) {}
   }
 }
 function seekTo(v) {
@@ -421,77 +713,6 @@ function seekTo(v) {
   audio.currentTime = (v / 100) * audio.duration;
 }
 
-// Visualizer
-let canvasCtx = null;
-function initVisualizer() {
-  if (!canvas) return;
-  ensureAudioContext();
-  if (!analyser) return;
-  canvasCtx = canvas.getContext("2d");
-  const resize = () => {
-    const r = canvas.getBoundingClientRect();
-    canvas.width = Math.floor(r.width);
-    canvas.height = 90;
-  };
-  resize();
-  window.addEventListener("resize", resize);
-  function draw() {
-    requestAnimationFrame(draw);
-    if (!analyser) return;
-    analyser.getByteFrequencyData(dataArray);
-    const w = canvas.width,
-      h = canvas.height;
-    // clear with subtle fade for smoother motion
-    canvasCtx.fillStyle = "rgba(0,0,0,0.06)";
-    canvasCtx.fillRect(0, 0, w, h);
-    // create gradient from accent to neon cyan and add glow
-    const accent =
-      getComputedStyle(document.documentElement).getPropertyValue("--accent") ||
-      "#10b981";
-    const neon = "#00fff7";
-    const grad = canvasCtx.createLinearGradient(0, 0, w, 0);
-    grad.addColorStop(0, accent.trim());
-    grad.addColorStop(1, neon);
-    canvasCtx.shadowBlur = 18;
-    canvasCtx.shadowColor = neon;
-
-    // draw a frequency-reactive wave
-    canvasCtx.lineWidth = 2;
-    canvasCtx.strokeStyle = grad;
-    canvasCtx.beginPath();
-    const sliceWidth = w / bufferLength;
-    let x = 0;
-    let bassSum = 0;
-    const bassCount = Math.max(4, Math.floor(bufferLength * 0.08));
-    for (let i = 0; i < bufferLength; i++) {
-      const v = dataArray[i] / 255; // 0..1
-      const y = h / 2 + (v - 0.5) * h * 0.9; // center wave
-      if (i === 0) canvasCtx.moveTo(x, y);
-      else canvasCtx.lineTo(x, y);
-      x += sliceWidth;
-      if (i < bassCount) bassSum += dataArray[i];
-    }
-    canvasCtx.stroke();
-
-    // draw filled area with gradient and low alpha (reduce shadow)
-    canvasCtx.shadowBlur = 6;
-    canvasCtx.shadowColor = neon;
-    canvasCtx.lineTo(w, h);
-    canvasCtx.lineTo(0, h);
-    canvasCtx.closePath();
-    canvasCtx.fillStyle = "rgba(16,185,129,0.06)";
-    canvasCtx.fill();
-
-    // compute bass level (0..1)
-    const bassAvg = bassSum / (bassCount * 255);
-    const bass = Math.min(1, Math.max(0, bassAvg * 1.6));
-    document.documentElement.style.setProperty(
-      "--bass",
-      String(bass.toFixed(3)),
-    );
-  }
-  draw();
-}
 function tryInitVisualizer() {
   ensureAudioContext();
   if (analyser) {

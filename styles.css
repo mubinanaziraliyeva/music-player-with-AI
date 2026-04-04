@@ -189,13 +189,121 @@ input[type="range"]::-webkit-slider-thumb {
 /* Visualizer styling */
 #visualizer {
   width: 100%;
-  background: linear-gradient(
-    90deg,
-    rgba(255, 255, 255, 0.02),
-    rgba(255, 255, 255, 0.01)
-  );
-  border-radius: 8px;
+  height: 150px; /* fixed HD visualizer height */
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.02), rgba(0, 0, 0, 0.04));
+  border-radius: 10px;
   display: block;
+  margin: 0.6rem auto;
+  box-shadow: 0 6px 30px rgba(2, 6, 23, 0.6);
+}
+
+/* Floating subtle animation for the main player card */
+.player-card {
+  animation: float 8s ease-in-out infinite;
+}
+@keyframes float {
+  0% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+  100% {
+    transform: translateY(0px);
+  }
+}
+
+/* Thin custom scrollbar for playlist */
+ul#playlist::-webkit-scrollbar {
+  width: 6px;
+}
+ul#playlist::-webkit-scrollbar-track {
+  background: transparent;
+}
+ul#playlist::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+}
+
+/* Input range: custom hidden thumb that expands on hover */
+input[type="range"] {
+  -webkit-appearance: none;
+  background: transparent;
+}
+input[type="range"]::-webkit-slider-runnable-track {
+  background: rgba(255, 255, 255, 0.04);
+  height: 8px;
+  border-radius: 8px;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  height: 12px;
+  width: 12px;
+  background: #1db954; /* spotify green */
+  border-radius: 50%;
+  cursor: pointer;
+  transition:
+    transform 0.18s ease,
+    width 0.18s ease,
+    height 0.18s ease,
+    box-shadow 0.18s ease;
+  transform: scale(0); /* hidden by default */
+  box-shadow: 0 4px 10px rgba(29, 185, 84, 0.16);
+}
+input[type="range"]:hover::-webkit-slider-thumb,
+input[type="range"]:active::-webkit-slider-thumb {
+  transform: scale(1);
+  width: 15px;
+  height: 15px;
+}
+/* Firefox */
+input[type="range"]::-moz-range-track {
+  background: rgba(255, 255, 255, 0.04);
+  height: 8px;
+  border-radius: 8px;
+}
+input[type="range"]::-moz-range-thumb {
+  height: 12px;
+  width: 12px;
+  background: #1db954;
+  border-radius: 50%;
+  border: none;
+  transform: scale(0);
+  transition: transform 0.18s ease;
+}
+input[type="range"]:hover::-moz-range-thumb,
+input[type="range"]:active::-moz-range-thumb {
+  transform: scale(1);
+  width: 15px;
+  height: 15px;
+}
+
+/* Compact equalizer sliders */
+#eqBass,
+#eqMid,
+#eqHigh {
+  height: 6px;
+  background: rgba(255, 255, 255, 0.03);
+}
+#eqBass::-webkit-slider-thumb,
+#eqMid::-webkit-slider-thumb,
+#eqHigh::-webkit-slider-thumb {
+  height: 10px;
+  width: 10px;
+  margin-top: -2px;
+  background: #10b981;
+  transform: scale(0.8);
+}
+
+/* Remove shimmering scanline overlay and use gentle box-shadow on cover */
+.skeleton-overlay {
+  display: none !important;
+}
+.cover-container img {
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
+}
+.cover-container.loading .skeleton-overlay {
+  display: none !important;
 }
 
 /* Accent color var usage */
@@ -424,4 +532,39 @@ main.container {
 .recommended-item {
   box-shadow: 0 8px 30px rgba(16, 185, 129, 0.06);
   border-radius: 8px;
+}
+
+/* Lyrics (vanilla app) */
+#lyricsContainer {
+  max-height: 180px;
+  overflow-y: auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.03);
+  margin-top: 8px;
+}
+#lyricsContainer .lyric-line {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 14px;
+  line-height: 1.6;
+  margin: 6px 0;
+  text-align: center;
+  transition:
+    color 200ms ease,
+    transform 220ms ease,
+    font-size 200ms ease;
+  padding: 2px 6px;
+  width: 100%;
+}
+#lyricsContainer .lyric-line.active {
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 15px;
+  transform: scale(1.02);
+  text-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
 }
