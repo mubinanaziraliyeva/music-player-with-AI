@@ -386,6 +386,13 @@ function initVisualizer() {
       "--bass",
       String(bass.toFixed(3)),
     );
+    // add subtle glow to cover when bass is present
+    try {
+      if (coverContainer) {
+        if (bass > 0.06) coverContainer.classList.add("cover-glow");
+        else coverContainer.classList.remove("cover-glow");
+      }
+    } catch (e) {}
   }
   draw();
 }
@@ -511,10 +518,12 @@ function parseLRC(lrcText) {
     const times = [];
     timeRe.lastIndex = 0;
     while ((match = timeRe.exec(line)) !== null) {
-      const min = parseInt(match[1], 10);
-      const sec = parseInt(match[2], 10);
-      const ms = match[3] ? parseInt(match[3].padEnd(3, "0"), 10) : 0;
-      const time = min * 60 + sec + ms / 1000;
+      // Use parseFloat for higher precision on seconds (handles decimals)
+      const min = Number(match[1]);
+      const secFloat = match[3]
+        ? parseFloat(match[2] + "." + match[3].padEnd(3, "0"))
+        : parseFloat(match[2]);
+      const time = Number(min * 60) + Number(secFloat);
       times.push(time);
     }
     const text = line.replace(timeRe, "").trim();
@@ -914,13 +923,22 @@ function updateLyricsHighlight(currentTime) {
         else if (i === idx) el.classList.add("active");
         else el.classList.add("future");
       });
-      // scroll active into center
+      // scroll active into center using scrollTo for precise control
       if (idx >= 0) {
         const activeEl = lyricsContentEl.querySelector(
           `.lyric-line[data-idx="${idx}"]`,
         );
-        if (activeEl)
-          activeEl.scrollIntoView({ behavior: "smooth", block: "center" });
+        if (activeEl && lyricsContentEl) {
+          try {
+            const container = lyricsContentEl;
+            const elTop = activeEl.offsetTop;
+            const elCenter =
+              elTop - container.clientHeight / 2 + activeEl.clientHeight / 2;
+            const maxTop = container.scrollHeight - container.clientHeight;
+            const target = Math.max(0, Math.min(maxTop, elCenter));
+            container.scrollTo({ top: target, behavior: "smooth" });
+          } catch (e) {}
+        }
       }
     }
   } catch (e) {}
@@ -1441,6 +1459,32 @@ document
 [playBtn, prevBtn, nextBtn, shuffleBtn, repeatBtn].forEach(
   (b) => b && b.setAttribute("tabindex", "0"),
 );
+
+// requestAnimationFrame-based loop for smoother lyric sync and progress updates
+let _rafId = null;
+function rafTick() {
+  try {
+    if (audio && audio.duration) {
+      // update progress UI (kept lightweight)
+      try {
+        const p = (audio.currentTime / audio.duration) * 100;
+        if (progress) progress.value = p;
+        if (currentTimeEl)
+          currentTimeEl.textContent = formatTime(audio.currentTime);
+        if (durationEl) durationEl.textContent = formatTime(audio.duration);
+      } catch (e) {}
+    }
+    // update lyrics highlight each frame for smoother sync
+    try {
+      if (audio) updateLyricsHighlight(audio.currentTime);
+    } catch (e) {}
+  } catch (e) {}
+  _rafId = requestAnimationFrame(rafTick);
+}
+// start RAF loop
+try {
+  if (!_rafId) _rafId = requestAnimationFrame(rafTick);
+} catch (e) {}
 
 // Like button for current track
 if (likeBtn) {

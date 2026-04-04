@@ -64,11 +64,8 @@
             ></canvas>
             <!-- Skeleton overlay while loading -->
             <div class="skeleton-overlay absolute inset-0"></div>
-            <!-- EQ controls: placed inside cover container (overlay under image) -->
-            <div
-              class="absolute left-0 right-0 bottom-0 p-2 bg-gradient-to-t from-black/50 to-transparent flex justify-center"
-              id="eqOverlay"
-            >
+            <!-- EQ controls: placed in-flow under the cover image for a stable layout -->
+            <div id="eqOverlay" class="eq-overlay">
               <div class="w-full max-w-xs">
                 <div class="grid grid-cols-3 gap-2 items-center w-full">
                   <div class="text-center">
@@ -162,23 +159,6 @@
                     <span id="lyricsStatus" class="text-xs text-gray-400"
                       >No lyrics loaded</span
                     >
-                    <button
-                      id="lyricOffsetMinus"
-                      class="btn btn-ghost btn-xs"
-                      title="Shift lyrics earlier"
-                    >
-                      -0.2s
-                    </button>
-                    <span id="lyricOffsetValue" class="text-xs text-green-300"
-                      >0.0s</span
-                    >
-                    <button
-                      id="lyricOffsetPlus"
-                      class="btn btn-ghost btn-xs"
-                      title="Shift lyrics later"
-                    >
-                      +0.2s
-                    </button>
                     <button
                       id="lyricOffsetMinus"
                       class="btn btn-ghost btn-xs"
@@ -363,18 +343,20 @@
       and modern controls.
     </footer>
 
-    <!-- Now Playing Stats (above AI Analysis) -->
+    <!-- Now Playing Stats (moved to bottom of page; non-fixed) -->
     <div
       id="nowStats"
-      class="fixed left-0 right-0 bottom-14 p-3 text-center text-sm text-gray-200 bg-[#00000022] backdrop-blur-sm border-t border-white/6 glass-card"
+      class="mt-6 p-3 text-center text-sm text-gray-200 bg-[#00000022] backdrop-blur-sm border-t border-white/6 glass-card"
+      style="max-width: 1100px; margin: 0 auto"
     >
       Now Playing — Energy: 0% • Mood: Unknown
     </div>
 
-    <!-- AI Analysis / Current Mood box -->
+    <!-- AI Analysis / Current Mood box (moved to bottom of page; non-fixed) -->
     <div
       id="aiAnalysis"
-      class="fixed left-0 right-0 bottom-0 p-3 text-center text-sm text-gray-300 bg-[#00000022] backdrop-blur-sm border-t border-white/6 glass-card"
+      class="mt-3 p-3 text-center text-sm text-gray-300 bg-[#00000022] backdrop-blur-sm border-t border-white/6 glass-card"
+      style="max-width: 1100px; margin: 0 auto"
     >
       Analyzing...
     </div>
