@@ -535,36 +535,61 @@ main.container {
 }
 
 /* Lyrics (vanilla app) */
+/* Lyrics (vanilla app) - make more prominent and easier to read */
 #lyricsContainer {
-  max-height: 180px;
+  max-height: 260px;
   overflow-y: auto;
-  padding: 8px;
+  padding: 10px 12px;
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: stretch;
   scroll-behavior: smooth;
   -webkit-overflow-scrolling: touch;
-  background: rgba(0, 0, 0, 0.25);
-  border: 1px solid rgba(255, 255, 255, 0.03);
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.28), rgba(0, 0, 0, 0.18));
+  border: 1px solid rgba(255, 255, 255, 0.04);
   margin-top: 8px;
 }
 #lyricsContainer .lyric-line {
-  color: rgba(255, 255, 255, 0.6);
-  font-size: 14px;
-  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 15px;
+  line-height: 1.7;
   margin: 6px 0;
   text-align: center;
-  transition:
-    color 200ms ease,
-    transform 220ms ease,
-    font-size 200ms ease;
-  padding: 2px 6px;
+  transition: all 0.5s ease;
+  padding: 6px 8px;
   width: 100%;
+  border-radius: 6px;
+}
+#lyricsContainer .lyric-line.future {
+  color: rgba(255, 255, 255, 0.6);
+  opacity: 0.6;
+}
+#lyricsContainer .lyric-line.past {
+  color: #ffd700; /* gold */
+  opacity: 0.95;
 }
 #lyricsContainer .lyric-line.active {
   color: #ffffff;
-  font-weight: 700;
-  font-size: 15px;
-  transform: scale(1.02);
-  text-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+  font-weight: 800;
+  font-size: 17px;
+  transform: scale(1.08);
+  text-shadow: 0 8px 26px rgba(0, 0, 0, 0.55);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+/* Thinner scrollbar for lyricsContent */
+#lyricsContent::-webkit-scrollbar {
+  width: 6px;
+}
+#lyricsContent::-webkit-scrollbar-track {
+  background: transparent;
+}
+#lyricsContent::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+}
+/* Firefox */
+#lyricsContent {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.06) transparent;
 }

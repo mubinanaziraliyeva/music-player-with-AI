@@ -64,6 +64,56 @@
             ></canvas>
             <!-- Skeleton overlay while loading -->
             <div class="skeleton-overlay absolute inset-0"></div>
+            <!-- EQ controls: placed inside cover container (overlay under image) -->
+            <div
+              class="absolute left-0 right-0 bottom-0 p-2 bg-gradient-to-t from-black/50 to-transparent flex justify-center"
+              id="eqOverlay"
+            >
+              <div class="w-full max-w-xs">
+                <div class="grid grid-cols-3 gap-2 items-center w-full">
+                  <div class="text-center">
+                    <label for="eqBass" class="text-xs text-gray-400"
+                      >Bass</label
+                    >
+                    <input
+                      id="eqBass"
+                      type="range"
+                      min="-12"
+                      max="12"
+                      value="0"
+                      step="0.5"
+                      class="w-full"
+                    />
+                  </div>
+                  <div class="text-center">
+                    <label for="eqMid" class="text-xs text-gray-400">Mid</label>
+                    <input
+                      id="eqMid"
+                      type="range"
+                      min="-12"
+                      max="12"
+                      value="0"
+                      step="0.5"
+                      class="w-full"
+                    />
+                  </div>
+                  <div class="text-center">
+                    <label for="eqHigh" class="text-xs text-gray-400"
+                      >Treble</label
+                    >
+                    <input
+                      id="eqHigh"
+                      type="range"
+                      min="-12"
+                      max="12"
+                      value="0"
+                      step="0.5"
+                      class="w-full"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
 
           <!-- Track Info and Controls -->
@@ -112,6 +162,54 @@
                     <span id="lyricsStatus" class="text-xs text-gray-400"
                       >No lyrics loaded</span
                     >
+                    <button
+                      id="lyricOffsetMinus"
+                      class="btn btn-ghost btn-xs"
+                      title="Shift lyrics earlier"
+                    >
+                      -0.2s
+                    </button>
+                    <span id="lyricOffsetValue" class="text-xs text-green-300"
+                      >0.0s</span
+                    >
+                    <button
+                      id="lyricOffsetPlus"
+                      class="btn btn-ghost btn-xs"
+                      title="Shift lyrics later"
+                    >
+                      +0.2s
+                    </button>
+                    <button
+                      id="lyricOffsetMinus"
+                      class="btn btn-ghost btn-xs"
+                      title="Shift lyrics earlier"
+                    >
+                      -0.2s
+                    </button>
+                    <span id="lyricOffsetValue" class="text-xs text-green-300"
+                      >0.0s</span
+                    >
+                    <button
+                      id="lyricOffsetPlus"
+                      class="btn btn-ghost btn-xs"
+                      title="Shift lyrics later"
+                    >
+                      +0.2s
+                    </button>
+                    <button
+                      id="saveOffsetBtn"
+                      class="btn btn-ghost btn-xs"
+                      title="Save offset"
+                    >
+                      Save
+                    </button>
+                    <button
+                      id="autoTuneBtn"
+                      class="btn btn-ghost btn-xs"
+                      title="Auto-tune offset"
+                    >
+                      Auto-tune
+                    </button>
                     <button id="toggleLyricsBtn" class="btn btn-ghost btn-sm">
                       Hide
                     </button>
@@ -175,47 +273,8 @@
             </div>
 
             <!-- Equalizer controls -->
-            <div
-              class="mt-5 grid grid-cols-3 gap-3 items-center"
-              aria-label="Equalizer"
-            >
-              <div class="text-center">
-                <label for="eqBass" class="text-xs text-gray-400">Bass</label>
-                <input
-                  id="eqBass"
-                  type="range"
-                  min="-12"
-                  max="12"
-                  value="0"
-                  step="0.5"
-                  class="w-full"
-                />
-              </div>
-              <div class="text-center">
-                <label for="eqMid" class="text-xs text-gray-400">Mid</label>
-                <input
-                  id="eqMid"
-                  type="range"
-                  min="-12"
-                  max="12"
-                  value="0"
-                  step="0.5"
-                  class="w-full"
-                />
-              </div>
-              <div class="text-center">
-                <label for="eqHigh" class="text-xs text-gray-400">Treble</label>
-                <input
-                  id="eqHigh"
-                  type="range"
-                  min="-12"
-                  max="12"
-                  value="0"
-                  step="0.5"
-                  class="w-full"
-                />
-              </div>
-            </div>
+            <!-- EQ moved beside cover for desktop; if JS finds #eqContainerMobile it will be hidden on large screens -->
+            <div class="hidden md:block" id="eqContainerDesktop">...</div>
 
             <!-- Volume (vertical, hidden until toggled) -->
             <div class="mt-6 relative">

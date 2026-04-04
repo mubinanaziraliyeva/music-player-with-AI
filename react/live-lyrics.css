@@ -1,0 +1,53 @@
+/* container */
+.live-lyrics-root {
+  max-height: 240px; /* adjust to your UI */
+  overflow-y: auto;
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  scroll-behavior: smooth; /* smooth programmatic scrolling */
+  -webkit-overflow-scrolling: touch;
+  background: rgba(0, 0, 0, 0.12);
+  border-radius: 8px;
+}
+
+/* base line */
+.live-lyrics-root .lyric-line {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 14px;
+  line-height: 1.6;
+  text-align: center;
+  transition: all 0.5s ease;
+  padding: 4px 6px;
+  cursor: pointer;
+  transform-origin: center center;
+  user-select: none;
+}
+
+/* future lines: muted gray with reduced opacity */
+.live-lyrics-root .lyric-line.future {
+  color: rgba(255, 255, 255, 0.65);
+  opacity: 0.5;
+  transform: scale(1);
+}
+
+/* active line: bright white and slightly larger */
+.live-lyrics-root .lyric-line.active {
+  color: #ffffff;
+  font-weight: 700;
+  transform: scale(1.1);
+  font-size: 15px;
+  text-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+}
+
+/* past lines: colored (gold) */
+.live-lyrics-root .lyric-line.past {
+  color: #ffd700; /* gold */
+  transform: scale(1);
+}
+
+/* subtle hover */
+.live-lyrics-root .lyric-line:hover {
+  opacity: 0.92;
+}

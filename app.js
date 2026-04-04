@@ -88,11 +88,168 @@ const lyricsContainerEl = document.getElementById("lyricsContainer");
 const lyricsContentEl = document.getElementById("lyricsContent");
 const lyricsStatusEl = document.getElementById("lyricsStatus");
 const toggleLyricsBtn = document.getElementById("toggleLyricsBtn");
+const lyricOffsetMinusBtn = document.getElementById("lyricOffsetMinus");
+const lyricOffsetPlusBtn = document.getElementById("lyricOffsetPlus");
+const lyricOffsetValueEl = document.getElementById("lyricOffsetValue");
+const saveOffsetBtn = document.getElementById("saveOffsetBtn");
+const autoTuneBtn = document.getElementById("autoTuneBtn");
 
 if (toggleLyricsBtn && lyricsContentEl) {
   toggleLyricsBtn.addEventListener("click", () => {
     const hidden = lyricsContentEl.classList.toggle("hidden");
     toggleLyricsBtn.textContent = hidden ? "Show" : "Hide";
+  });
+}
+
+// offset UI handlers (adjust sync offset per track)
+function updateOffsetUI() {
+  try {
+    const t = tracks[currentIndex] || {};
+    const v = Number(t._syncOffset || 0);
+    if (lyricOffsetValueEl) lyricOffsetValueEl.textContent = `${v.toFixed(1)}s`;
+  } catch (e) {}
+}
+
+// Persist offsets per-track using localStorage
+function offsetStorageKeyForTrack(track) {
+  if (!track) return null;
+  // prefer filename if available, otherwise use normalized title
+  const id =
+    track.file ||
+    track.src ||
+    track.title ||
+    track.name ||
+    `track-${track.index}`;
+  return `lyricsOffset::${id}`;
+}
+
+function saveOffsetForTrack(track) {
+  try {
+    const key = offsetStorageKeyForTrack(track);
+    if (!key) return;
+    const val = Number(track._syncOffset || 0);
+    localStorage.setItem(key, String(val));
+    if (lyricsStatusEl)
+      lyricsStatusEl.textContent = `Offset saved: ${val.toFixed(2)}s`;
+  } catch (e) {
+    console.warn("saveOffsetForTrack failed", e);
+  }
+}
+
+function loadOffsetForTrack(track) {
+  try {
+    const key = offsetStorageKeyForTrack(track);
+    if (!key) return 0;
+    const raw = localStorage.getItem(key);
+    if (!raw) return 0;
+    const v = Number(raw);
+    if (!isFinite(v)) return 0;
+    track._syncOffset = v;
+    return v;
+  } catch (e) {
+    return 0;
+  }
+}
+
+if (lyricOffsetMinusBtn) {
+  lyricOffsetMinusBtn.addEventListener("click", () => {
+    try {
+      const t = tracks[currentIndex] || {};
+      t._syncOffset = Number((Number(t._syncOffset || 0) - 0.2).toFixed(3));
+      updateOffsetUI();
+      // refresh highlight immediately
+      try {
+        updateLyricsHighlight(audio.currentTime);
+      } catch (e) {}
+    } catch (e) {}
+  });
+}
+if (lyricOffsetPlusBtn) {
+  lyricOffsetPlusBtn.addEventListener("click", () => {
+    try {
+      const t = tracks[currentIndex] || {};
+      t._syncOffset = Number((Number(t._syncOffset || 0) + 0.2).toFixed(3));
+      updateOffsetUI();
+      try {
+        updateLyricsHighlight(audio.currentTime);
+      } catch (e) {}
+    } catch (e) {}
+  });
+}
+// save offset to localStorage automatically when Save clicked
+if (saveOffsetBtn) {
+  saveOffsetBtn.addEventListener("click", () => {
+    try {
+      const t = tracks[currentIndex] || {};
+      saveOffsetForTrack(t);
+    } catch (e) {}
+  });
+}
+
+// Auto-tune: probe small offsets and choose the one minimizing distance to nearest lyric across sampled audio times
+async function autoTuneOffset(track) {
+  if (!track || !track.lyrics || !track.lyrics.length) return;
+  const audioEl = audio;
+  if (!audioEl || !audioEl.duration || !isFinite(audioEl.duration)) return;
+  const candidates = [];
+  for (let d = -0.6; d <= 0.6; d += 0.1) candidates.push(Number(d.toFixed(2)));
+  // sample while playing for up to 2 seconds or until 12 samples
+  const samples = [];
+  const sampleCount = 12;
+  const sampleInterval = Math.min(
+    200,
+    Math.max(80, (audioEl.duration * 1000) / 50),
+  );
+  // ensure playing during sampling
+  const wasPaused = audioEl.paused;
+  try {
+    if (audioEl.paused) await audioEl.play().catch(() => {});
+  } catch (e) {}
+  for (let i = 0; i < sampleCount; i++) {
+    samples.push(audioEl.currentTime);
+    await new Promise((r) => setTimeout(r, 150));
+  }
+  // compute score for each candidate: sum of min distances from sample to nearest lyric time+offset
+  const scores = candidates.map((off) => {
+    let s = 0;
+    for (const samp of samples) {
+      let best = Infinity;
+      for (const ln of track.lyrics) {
+        if (typeof ln.time !== "number") continue;
+        const diff = Math.abs(ln.time + off - samp);
+        if (diff < best) best = diff;
+      }
+      s += best;
+    }
+    return { off, score: s };
+  });
+  scores.sort((a, b) => a.score - b.score);
+  const best = scores[0];
+  track._syncOffset = Number(best.off.toFixed(3));
+  saveOffsetForTrack(track);
+  updateOffsetUI();
+  try {
+    updateLyricsHighlight(audio.currentTime);
+  } catch (e) {}
+  // restore play/pause state
+  try {
+    if (wasPaused) audioEl.pause();
+  } catch (e) {}
+  return best;
+}
+
+if (autoTuneBtn) {
+  autoTuneBtn.addEventListener("click", async () => {
+    try {
+      const t = tracks[currentIndex] || {};
+      if (!t || !t.lyrics || !t.lyrics.length) return;
+      if (lyricsStatusEl) lyricsStatusEl.textContent = "Auto-tuning...";
+      const res = await autoTuneOffset(t);
+      if (lyricsStatusEl && res)
+        lyricsStatusEl.textContent = `Auto-tuned: ${res.off}s`;
+    } catch (e) {
+      if (lyricsStatusEl) lyricsStatusEl.textContent = "Auto-tune failed";
+    }
   });
 }
 
@@ -286,6 +443,13 @@ async function crossfadeTo(idx) {
 
 function loadTrack(idx) {
   const t = tracks[idx];
+  // ensure a sync offset exists per-track
+  if (typeof t._syncOffset === "undefined") t._syncOffset = 0;
+  // load persisted offset if present
+  try {
+    loadOffsetForTrack(t);
+  } catch (e) {}
+  updateOffsetUI();
   // show skeleton while loading
   if (coverContainer) coverContainer.classList.add("loading");
   audio.src = encodeURI(t.file);
@@ -360,6 +524,59 @@ function parseLRC(lrcText) {
   return out;
 }
 
+// If a lyrics file contains no time tags, approximate timestamps so lines
+// can be highlighted live while the track plays. This distributes timestamps
+// across the track duration with a small head/tail padding.
+function assignApproxTimestamps(lyrics, duration) {
+  if (
+    !Array.isArray(lyrics) ||
+    !lyrics.length ||
+    !duration ||
+    !isFinite(duration)
+  )
+    return lyrics;
+  // Weight by text length so longer lines receive proportionally more time
+  const weights = lyrics.map((l) => Math.max(1, String(l.text || "").length));
+  const totalWeight = weights.reduce((s, w) => s + w, 0) || lyrics.length;
+  const head = Math.min(1.0, duration * 0.04); // small head padding
+  const tail = Math.min(1.0, duration * 0.04); // small tail padding
+  const usable = Math.max(0.1, duration - head - tail);
+  let cum = 0;
+  return lyrics.map((ln, i) => {
+    const w = weights[i];
+    const frac = (cum + w / 2) / totalWeight; // center of weighted bin
+    const t = head + usable * frac;
+    cum += w;
+    return { time: Number(t.toFixed(3)), text: ln.text || "" };
+  });
+}
+
+function assignTimestampsIfNeeded(track, parsed) {
+  if (!parsed || !parsed.length) return parsed;
+  const hasTime = parsed.some(
+    (p) => typeof p.time === "number" && !isNaN(p.time),
+  );
+  if (hasTime) return parsed;
+  // mark track for later timestamping if duration unknown
+  if (
+    !audio ||
+    !audio.duration ||
+    !isFinite(audio.duration) ||
+    audio.duration === 0
+  ) {
+    try {
+      track._needsTimestamping = true;
+    } catch (e) {}
+    return parsed;
+  }
+  // assign approximate timestamps now
+  const assigned = assignApproxTimestamps(parsed, audio.duration);
+  try {
+    track._needsTimestamping = false;
+  } catch (e) {}
+  return assigned;
+}
+
 async function loadLyricsForTrack(track) {
   // Try flexible matching for LRC files in /Lyrics by title or filename
   console.groupCollapsed &&
@@ -387,6 +604,136 @@ async function loadLyricsForTrack(track) {
       .replace(/[^a-z0-9\s-]/g, "")
       .trim()
       .replace(/\s+/g, "_");
+  }
+
+  // If there's an index of lyric filenames available, use it to find the
+  // best match (handles typos/casing/spacing on disk). This avoids trying to
+  // guess exact URLs when filenames differ slightly from track titles.
+  try {
+    const idxResp = await fetch("Lyrics/index.json");
+    if (idxResp && idxResp.ok) {
+      const list = await idxResp.json();
+      if (Array.isArray(list) && list.length) {
+        // build map by normalized basename -> filename
+        const map = {};
+        list.forEach((fn) => {
+          const base = fn.replace(/\.[^/.]+$/, "");
+          map[base.toLowerCase()] = fn;
+          map[normalizeName(base)] = fn;
+        });
+        // try exact-ish matches from our tryNames
+        for (const n of tryNames) {
+          if (!n) continue;
+          const keys = [
+            n.toString(),
+            n.toString().toLowerCase(),
+            normalizeName(n),
+          ];
+          for (const k of keys) {
+            if (map[k]) {
+              const url = `Lyrics/${map[k]}`;
+              try {
+                const r = await fetch(url);
+                if (r && r.ok) {
+                  const txt = await r.text();
+                  let parsed = parseLRC(txt);
+                  if (!parsed || parsed.length === 0) {
+                    const lines = txt
+                      .split(/\r?\n/)
+                      .map((s) => s.trim())
+                      .filter(Boolean);
+                    parsed = lines.map((line) => ({ time: null, text: line }));
+                    if (lyricsStatusEl)
+                      lyricsStatusEl.textContent = `Loaded: ${map[k]} (no timestamps)`;
+                    console.info &&
+                      console.info(
+                        `lyrics: loaded via index ${map[k]} (no timestamps, ${parsed.length} lines)`,
+                      );
+                  } else {
+                    if (lyricsStatusEl)
+                      lyricsStatusEl.textContent = `Loaded: ${map[k]}`;
+                    console.info &&
+                      console.info(
+                        `lyrics: loaded via index ${map[k]} (${parsed.length} lines)`,
+                      );
+                  }
+                  // assign approximate timestamps if needed
+                  parsed = assignTimestampsIfNeeded(track, parsed);
+                  track.lyrics = parsed;
+                  renderLyrics(parsed);
+                  try {
+                    updateOffsetUI();
+                  } catch (e) {}
+                  console.groupEnd && console.groupEnd();
+                  return;
+                }
+              } catch (e) {
+                console.warn &&
+                  console.warn(
+                    "lyrics fetch error via index for",
+                    url,
+                    e && e.message ? e.message : e,
+                  );
+              }
+            }
+          }
+        }
+
+        // fuzzy substring match: normalized title may contain the indexed key
+        const primary = normalizeName(tryNames[0] || "");
+        if (primary) {
+          for (const mk of Object.keys(map)) {
+            if (!mk) continue;
+            const normMk = mk.toString();
+            if (primary.includes(normMk) || normMk.includes(primary)) {
+              const url = `Lyrics/${map[mk]}`;
+              try {
+                const r2 = await fetch(url);
+                if (r2 && r2.ok) {
+                  const txt2 = await r2.text();
+                  let parsed2 = parseLRC(txt2);
+                  if (!parsed2 || parsed2.length === 0) {
+                    const lines2 = txt2
+                      .split(/\r?\n/)
+                      .map((s) => s.trim())
+                      .filter(Boolean);
+                    parsed2 = lines2.map((l) => ({ time: null, text: l }));
+                    if (lyricsStatusEl)
+                      lyricsStatusEl.textContent = `Loaded: ${map[mk]} (no timestamps)`;
+                    console.info &&
+                      console.info(
+                        `lyrics: loaded via fuzzy index ${map[mk]} (no timestamps, ${parsed2.length} lines)`,
+                      );
+                  } else {
+                    if (lyricsStatusEl)
+                      lyricsStatusEl.textContent = `Loaded: ${map[mk]}`;
+                    console.info &&
+                      console.info(
+                        `lyrics: loaded via fuzzy index ${map[mk]} (${parsed2.length} lines)`,
+                      );
+                  }
+                  // assign approximate timestamps if needed
+                  parsed2 = assignTimestampsIfNeeded(track, parsed2);
+                  track.lyrics = parsed2;
+                  renderLyrics(parsed2);
+                  console.groupEnd && console.groupEnd();
+                  return;
+                }
+              } catch (e) {
+                console.warn &&
+                  console.warn(
+                    "lyrics fetch error via fuzzy index for",
+                    url,
+                    e && e.message ? e.message : e,
+                  );
+              }
+            }
+          }
+        }
+      }
+    }
+  } catch (e) {
+    // ignore index errors and fall back to candidate probing
   }
 
   const candidates = [];
@@ -419,12 +766,31 @@ async function loadLyricsForTrack(track) {
         continue;
       }
       const txt = await res.text();
-      const parsed = parseLRC(txt);
+      let parsed = parseLRC(txt);
+      if (!parsed || parsed.length === 0) {
+        const lines = txt
+          .split(/\r?\n/)
+          .map((s) => s.trim())
+          .filter(Boolean);
+        parsed = lines.map((line) => ({ time: null, text: line }));
+        if (lyricsStatusEl)
+          lyricsStatusEl.textContent = `Loaded: ${c}.lrc (no timestamps)`;
+        console.info &&
+          console.info(
+            `lyrics: loaded ${c}.lrc (no timestamps, ${parsed.length} lines)`,
+          );
+      } else {
+        if (lyricsStatusEl) lyricsStatusEl.textContent = `Loaded: ${c}.lrc`;
+        console.info &&
+          console.info(`lyrics: loaded ${c}.lrc (${parsed.length} lines)`);
+      }
+      // assign approximate timestamps if needed
+      parsed = assignTimestampsIfNeeded(track, parsed);
       track.lyrics = parsed;
       renderLyrics(parsed);
-      if (lyricsStatusEl) lyricsStatusEl.textContent = `Loaded: ${c}.lrc`;
-      console.info &&
-        console.info(`lyrics: loaded ${c}.lrc (${parsed.length} lines)`);
+      try {
+        updateOffsetUI();
+      } catch (e) {}
       found = true;
       break;
     } catch (e) {
@@ -444,11 +810,23 @@ async function loadLyricsForTrack(track) {
       const res2 = await fetch(altUrl);
       if (res2 && res2.ok) {
         const txt2 = await res2.text();
-        const parsed2 = parseLRC(txt2);
+        let parsed2 = parseLRC(txt2);
+        if (!parsed2 || parsed2.length === 0) {
+          const lines2 = txt2
+            .split(/\r?\n/)
+            .map((s) => s.trim())
+            .filter(Boolean);
+          parsed2 = lines2.map((l) => ({ time: null, text: l }));
+          if (lyricsStatusEl)
+            lyricsStatusEl.textContent = `Loaded: ${track.title}.lrc (no timestamps)`;
+        } else if (lyricsStatusEl)
+          lyricsStatusEl.textContent = `Loaded: ${track.title}.lrc`;
+        parsed2 = assignTimestampsIfNeeded(track, parsed2);
         track.lyrics = parsed2;
         renderLyrics(parsed2);
-        if (lyricsStatusEl)
-          lyricsStatusEl.textContent = `Loaded: ${track.title}.lrc`;
+        try {
+          updateOffsetUI();
+        } catch (e) {}
         found = true;
       }
     } catch (e) {}
@@ -457,6 +835,9 @@ async function loadLyricsForTrack(track) {
   if (!found) {
     track.lyrics = [];
     renderLyrics([]);
+    try {
+      updateOffsetUI();
+    } catch (e) {}
     if (lyricsStatusEl) lyricsStatusEl.textContent = "No lyrics found";
   }
 }
@@ -476,6 +857,21 @@ function renderLyrics(lyrics) {
     div.className = "lyric-line";
     div.setAttribute("data-idx", String(i));
     div.textContent = ln.text || "";
+    // click-to-seek: jump to lyric time when available
+    div.style.cursor = "pointer";
+    div.addEventListener("click", (e) => {
+      try {
+        if (typeof ln.time === "number" && isFinite(ln.time)) {
+          const ttrack = tracks[currentIndex] || {};
+          const off = Number(ttrack._syncOffset || 0);
+          audio.currentTime = Math.max(0, ln.time + off);
+          // ensure playing after seek
+          try {
+            if (audio.paused) audio.play().catch(() => {});
+          } catch (e) {}
+        }
+      } catch (e) {}
+    });
     lyricsContentEl.appendChild(div);
   });
   // reset current highlighted index when new lyrics loaded
@@ -491,28 +887,43 @@ function updateLyricsHighlight(currentTime) {
   const t = tracks[currentIndex];
   if (!t || !t.lyrics || !t.lyrics.length) return;
   const lyrics = t.lyrics;
-  // find last index where time <= currentTime
+  const offset = Number(t._syncOffset || 0);
+  const effectiveTime =
+    typeof currentTime === "number" ? currentTime - offset : currentTime;
+  // find last index where time <= effectiveTime
   let idx = -1;
   for (let i = 0; i < lyrics.length; i++) {
-    if (lyrics[i].time <= currentTime) idx = i;
+    const itemTime =
+      typeof lyrics[i].time === "number" && !isNaN(lyrics[i].time)
+        ? lyrics[i].time
+        : Infinity;
+    if (itemTime <= effectiveTime) idx = i;
     else break;
   }
   if (idx === currentLyricIndex) return;
-  // remove old active
-  const prev =
-    lyricsContentEl && lyricsContentEl.querySelector(".lyric-line.active");
-  if (prev) prev.classList.remove("active");
   currentLyricIndex = idx;
-  if (idx >= 0) {
-    const el =
+  // update classes for all lines (past/active/future)
+  try {
+    const children =
       lyricsContentEl &&
-      lyricsContentEl.querySelector(`.lyric-line[data-idx="${idx}"]`);
-    if (el) {
-      el.classList.add("active");
-      // smooth center scroll into view
-      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      Array.from(lyricsContentEl.querySelectorAll(".lyric-line"));
+    if (children && children.length) {
+      children.forEach((el, i) => {
+        el.classList.remove("active", "past", "future");
+        if (i < idx) el.classList.add("past");
+        else if (i === idx) el.classList.add("active");
+        else el.classList.add("future");
+      });
+      // scroll active into center
+      if (idx >= 0) {
+        const activeEl = lyricsContentEl.querySelector(
+          `.lyric-line[data-idx="${idx}"]`,
+        );
+        if (activeEl)
+          activeEl.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
     }
-  }
+  } catch (e) {}
 }
 
 // Render playlist items into the sidebar
@@ -958,6 +1369,20 @@ audio.addEventListener("loadedmetadata", () => {
   } catch (e) {}
   try {
     computeMoodForIndex(currentIndex);
+  } catch (e) {}
+  // If the currently loaded track had lyrics without timestamps, assign them now
+  try {
+    const t = tracks[currentIndex];
+    if (t && t._needsTimestamping && t.lyrics && t.lyrics.length) {
+      t.lyrics = assignApproxTimestamps(t.lyrics, audio.duration);
+      t._needsTimestamping = false;
+      renderLyrics(t.lyrics);
+      if (lyricsStatusEl)
+        lyricsStatusEl.textContent =
+          t.lyrics && t.lyrics.length
+            ? `${t.lyrics.length} lines (timestamps approx)`
+            : "Loaded (timestamps approx)";
+    }
   } catch (e) {}
 });
 audio.addEventListener("ended", () => {
